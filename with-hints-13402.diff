@@ -1,0 +1,73 @@
+Index: django/db/models/sql/compiler.py
+===================================================================
+--- django/db/models/sql/compiler.py	(revision 13402)
++++ django/db/models/sql/compiler.py	(working copy)
+@@ -441,12 +441,16 @@
+                 continue
+             alias_str = (alias != name and ' %s' % alias or '')
+             if join_type and not first:
+-                result.append('%s %s%s ON (%s.%s = %s.%s)'
++                part ='%s %s%s ON (%s.%s = %s.%s)' \
+                         % (join_type, qn(name), alias_str, qn(lhs),
+-                           qn2(lhs_col), qn(alias), qn2(col)))
++                           qn2(lhs_col), qn(alias), qn2(col))
+             else:
+                 connector = not first and ', ' or ''
+-                result.append('%s%s%s' % (connector, qn(name), alias_str))
++                part = '%s%s%s' % (connector, qn(name), alias_str)
++            for model, hint in self.query.hints.items():
++                if model._meta.db_table == name:
++                    part += ' USE INDEX (%s)' % ', '.join(hint)
++            result.append(part)
+             first = False
+         for t in self.query.extra_tables:
+             alias, unused = self.query.table_alias(t)
+Index: django/db/models/sql/query.py
+===================================================================
+--- django/db/models/sql/query.py	(revision 13402)
++++ django/db/models/sql/query.py	(working copy)
+@@ -133,6 +133,7 @@
+         self.distinct = False
+         self.select_related = False
+         self.related_select_cols = []
++        self.hints = {}
+ 
+         # SQL aggregate-related attributes
+         self.aggregates = SortedDict() # Maps alias -> SQL aggregate function
+@@ -284,6 +285,7 @@
+             obj._extra_select_cache = self._extra_select_cache.copy()
+         obj.extra_tables = self.extra_tables
+         obj.extra_order_by = self.extra_order_by
++        obj.hints = self.hints
+         obj.deferred_loading = deepcopy(self.deferred_loading, memo=memo)
+         if self.filter_is_sticky and self.used_aliases:
+             obj.used_aliases = self.used_aliases.copy()
+@@ -1641,6 +1643,9 @@
+         if order_by:
+             self.extra_order_by = order_by
+ 
++    def add_hint(self, model, hint):
++        add_to_dict(self.hints, model, hint)
++            
+     def clear_deferred_loading(self):
+         """
+         Remove any fields from the deferred loading set.
+Index: django/db/models/query.py
+===================================================================
+--- django/db/models/query.py	(revision 13402)
++++ django/db/models/query.py	(working copy)
+@@ -708,6 +708,14 @@
+         clone._db = alias
+         return clone
+ 
++    def with_hints(self, *args, **kwargs):
++        clone = self._clone()
++        for hint in args:
++            clone.query.add_hint(self.model, hint)
++        for model, hint in kwargs.items():
++            clone.query.add_hint(model, hint)
++        return clone
++        
+     ###################################
+     # PUBLIC INTROSPECTION ATTRIBUTES #
+     ###################################
