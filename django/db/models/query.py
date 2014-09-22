@@ -720,6 +720,15 @@ class QuerySet(object):
         clone._db = alias
         return clone
 
+    # https://code.djangoproject.com/attachment/ticket/11003/with-hints-13402.diff
+    def with_hints(self, *args, **kwargs):
+        clone = self._clone()
+        for hint in args:
+            clone.query.add_hint(self.model, hint)
+        for model, hint in kwargs.items():
+            clone.query.add_hint(model, hint)
+        return clone
+
     ###################################
     # PUBLIC INTROSPECTION ATTRIBUTES #
     ###################################

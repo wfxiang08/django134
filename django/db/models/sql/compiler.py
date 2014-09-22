@@ -1,3 +1,4 @@
+# -*- encoding:utf-8 -*-
 from django.core.exceptions import FieldError
 from django.db import connections
 from django.db.backends.util import truncate_name
@@ -443,13 +444,23 @@ class SQLCompiler(object):
                 # alias_map if they aren't in a join. That's OK. We skip them.
                 continue
             alias_str = (alias != name and ' %s' % alias or '')
+            # 参考: https://code.djangoproject.com/attachment/ticket/11003/with-hints-13402.diff
             if join_type and not first:
-                result.append('%s %s%s ON (%s.%s = %s.%s)'
-                        % (join_type, qn(name), alias_str, qn(lhs),
-                           qn2(lhs_col), qn(alias), qn2(col)))
+                # result.append('%s %s%s ON (%s.%s = %s.%s)'
+                #         % (join_type, qn(name), alias_str, qn(lhs),
+                #            qn2(lhs_col), qn(alias), qn2(col)))
+                part ='%s %s%s ON (%s.%s = %s.%s)' % (join_type, qn(name), alias_str, qn(lhs),qn2(lhs_col), qn(alias), qn2(col))
             else:
+
                 connector = not first and ', ' or ''
-                result.append('%s%s%s' % (connector, qn(name), alias_str))
+                #result.append('%s%s%s' % (connector, qn(name), alias_str))
+                part = '%s%s%s' % (connector, qn(name), alias_str)
+
+            for model, hint in self.query.hints.items():
+                 if model._meta.db_table == name:
+                     part += ' USE INDEX (%s)' % ', '.join(hint)
+            result.append(part)
+
             first = False
         for t in self.query.extra_tables:
             alias, unused = self.query.table_alias(t)
