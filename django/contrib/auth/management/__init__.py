@@ -12,7 +12,7 @@ def _get_permission_codename(action, opts):
 def _get_all_permissions(opts):
     "Returns (codename, name) for all permissions in the given opts."
     perms = []
-    for action in ('add', 'change', 'delete'):
+    for action in ('add', 'change', 'delete', 'view'):
         perms.append((_get_permission_codename(action, opts), u'Can %s %s' % (action, opts.verbose_name_raw)))
     return perms + list(opts.permissions)
 

@@ -384,6 +384,15 @@ class ModelAdmin(BaseModelAdmin):
         opts = self.opts
         return request.user.has_perm(opts.app_label + '.' + opts.get_delete_permission())
 
+
+    def has_view_permission(self, request):
+        """
+        Returns True if the given request has permission to add an object.
+        Can be overriden by the user in subclasses.
+        """
+        opts = self.opts
+        return request.user.has_perm(opts.app_label + '.' + opts.get_view_permission())
+
     def get_model_perms(self, request):
         """
         Returns a dict of all perms for this model. This dict has the keys
@@ -394,6 +403,7 @@ class ModelAdmin(BaseModelAdmin):
             'add': self.has_add_permission(request),
             'change': self.has_change_permission(request),
             'delete': self.has_delete_permission(request),
+            'view': self.has_view_permission(request),
         }
 
     def get_fieldsets(self, request, obj=None):
@@ -946,7 +956,10 @@ class ModelAdmin(BaseModelAdmin):
 
         obj = self.get_object(request, unquote(object_id))
 
-        if not self.has_change_permission(request, obj):
+        if request.method == 'GET' and not self.has_change_permission(request, obj) and not self.has_view_permission(request):
+            raise PermissionDenied
+
+        if request.method == 'POST' and not self.has_change_permission(request, obj):
             raise PermissionDenied
 
         if obj is None:
@@ -1035,9 +1048,12 @@ class ModelAdmin(BaseModelAdmin):
         from django.contrib.admin.views.main import ERROR_FLAG
         opts = self.model._meta
         app_label = opts.app_label
-        if not self.has_change_permission(request, None):
+
+        if request.method == 'GET' and not self.has_change_permission(request, None) and not self.has_view_permission(request):
             raise PermissionDenied
 
+        if request.method == 'POST' and not self.has_change_permission(request, None):
+            raise PermissionDenied
         # Check actions to see if any are available on this changelist
         actions = self.get_actions(request)
 
