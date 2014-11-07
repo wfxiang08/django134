@@ -267,13 +267,13 @@ class TransactionTestCase(ut2.TestCase):
             databases = connections
         else:
             databases = [DEFAULT_DB_ALIAS]
-        for db in databases:
-            call_command('flush', verbosity=0, interactive=False, database=db)
-
-            if hasattr(self, 'fixtures'):
-                # We have to use this slightly awkward syntax due to the fact
-                # that we're using *args and **kwargs together.
-                call_command('loaddata', *self.fixtures, **{'verbosity': 0, 'database': db})
+        # for db in databases:
+        #     call_command('flush', verbosity=0, interactive=False, database=db)
+        #
+        #     if hasattr(self, 'fixtures'):
+        #         # We have to use this slightly awkward syntax due to the fact
+        #         # that we're using *args and **kwargs together.
+        #         call_command('loaddata', *self.fixtures, **{'verbosity': 0, 'database': db})
 
     def _urlconf_setup(self):
         if hasattr(self, 'urls'):

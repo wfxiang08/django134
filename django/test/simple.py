@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 import unittest as real_unittest
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
@@ -32,6 +33,7 @@ class DjangoTestRunner(unittest.TextTestRunner):
 def get_tests(app_module):
     try:
         app_path = app_module.__name__.split('.')[:-1]
+        # 导入api.tests.py这样的modules
         test_module = __import__('.'.join(app_path + [TEST_MODULE]), {}, {}, TEST_MODULE)
     except ImportError, e:
         # Couldn't import tests.py. Was it due to a missing file, or
@@ -190,6 +192,14 @@ def reorder_suite(suite, classes):
         bins[0].addTests(bins[i+1])
     return bins[0]
 
+def _isnotsuite(test):
+    "A crude way to tell apart testcases and suites with duck-typing"
+    try:
+        iter(test)
+    except TypeError:
+        return True
+    return False
+
 def dependency_ordered(test_databases, dependencies):
     """Reorder test_databases into an order that honors the dependencies
     described in TEST_DEPENDENCIES.
@@ -224,6 +234,16 @@ def dependency_ordered(test_databases, dependencies):
             raise ImproperlyConfigured("Circular dependency in TEST_DEPENDENCIES")
         test_databases = deferred
     return ordered_test_databases
+
+def traverse_test_suit(suit):
+    count = 0
+    for t in suit:
+        if isinstance(t, unittest.TestSuite):
+            count += traverse_test_suit(t)
+        else:
+            count += 1
+    return count
+
 
 class DjangoTestSuiteRunner(object):
     def __init__(self, verbosity=1, interactive=True, failfast=True, **kwargs):
@@ -313,6 +333,14 @@ class DjangoTestSuiteRunner(object):
         return old_names, mirrors
 
     def run_suite(self, suite, **kwargs):
+        # 遍历TestSuite
+
+        # 准备做测试
+        total_count = traverse_test_suit(suite)
+        from unittest import case
+        case.test_case_current_index = 0
+        case.test_case_total_count = total_count
+
         return unittest.TextTestRunner(verbosity=self.verbosity, failfast=self.failfast).run(suite)
 
     def teardown_databases(self, old_config, **kwargs):
@@ -356,9 +384,9 @@ class DjangoTestSuiteRunner(object):
         """
         self.setup_test_environment()
         suite = self.build_suite(test_labels, extra_tests)
-        old_config = self.setup_databases()
+        # old_config = self.setup_databases()
         result = self.run_suite(suite)
-        self.teardown_databases(old_config)
+        #self.teardown_databases(old_config)
         self.teardown_test_environment()
         return self.suite_result(suite, result)
 
