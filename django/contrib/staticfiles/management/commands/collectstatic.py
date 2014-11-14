@@ -1,4 +1,6 @@
+# -*- coding:utf-8 -*-
 import os
+import subprocess
 import sys
 import shutil
 from optparse import make_option
@@ -9,6 +11,24 @@ from django.core.management.base import CommandError, NoArgsCommand
 from django.utils.encoding import smart_str
 
 from django.contrib.staticfiles import finders
+import platform
+is_mac_os = platform.system() == "Darwin"
+
+# Django必须是通过pip安装，不能采用egg
+if is_mac_os:
+    md5_command = "md5"
+else:
+    md5_command = "md5sum"
+
+def get_normalized_md5(source_path):
+    md5 = subprocess.check_output("%s %s" % (md5_command, source_path), shell=True)
+    if is_mac_os:
+        idx = md5.find("=")
+        if idx != -1:
+            md5 = md5[(idx + 2):]
+    else:
+        md5 = md5[:32]
+    return md5
 
 class Command(NoArgsCommand):
     """
@@ -35,9 +55,9 @@ class Command(NoArgsCommand):
 
     def __init__(self, *args, **kwargs):
         super(NoArgsCommand, self).__init__(*args, **kwargs)
-        self.copied_files = []
-        self.symlinked_files = []
-        self.unmodified_files = []
+        self.copied_files = set()
+        self.symlinked_files = set()
+        self.unmodified_files = set()
         self.storage = get_storage_class(settings.STATICFILES_STORAGE)()
         try:
             self.storage.path('')
@@ -76,7 +96,7 @@ Type 'yes' to continue, or 'no' to cancel: """)
             if confirm != 'yes':
                 raise CommandError("Collecting static files cancelled.")
 
-        processed_files = []
+        processed_files = set() # 用于滤重
         for finder in finders.get_finders():
             for path, storage in finder.list(ignore_patterns):
                 # Prefix the relative path if the source storage contains it
@@ -86,11 +106,14 @@ Type 'yes' to continue, or 'no' to cancel: """)
                     prefixed_path = path
                 if prefixed_path in processed_files:
                     continue
+
+                # 遍历所有可能的文件
                 if symlink:
                     self.link_file(path, prefixed_path, storage, **options)
                 else:
                     self.copy_file(path, prefixed_path, storage, **options)
-                processed_files.append(prefixed_path)
+
+                processed_files.add(prefixed_path)
 
         actual_count = len(self.copied_files) + len(self.symlinked_files)
         unmodified_count = len(self.unmodified_files)
@@ -115,7 +138,9 @@ Type 'yes' to continue, or 'no' to cancel: """)
     def delete_file(self, path, prefixed_path, source_storage, **options):
         # Whether we are in symlink mode
         symlink = options['link']
+
         # Checks if the target file should be deleted if it already exists
+        # 如果已经存在
         if self.storage.exists(prefixed_path):
             try:
                 # When was the target file modified last time?
@@ -124,6 +149,9 @@ Type 'yes' to continue, or 'no' to cancel: """)
                 # The storage doesn't support ``modified_time`` or failed
                 pass
             else:
+                # 双重处理
+                # 1. 上次修改时间
+                # 2.
                 try:
                     # When was the source file modified last time?
                     source_last_modified = source_storage.modified_time(path)
@@ -135,14 +163,31 @@ Type 'yes' to continue, or 'no' to cancel: """)
                         full_path = self.storage.path(prefixed_path)
                     else:
                         full_path = None
+
+                    # 如果时间一致?
                     # Skip the file if the source file is younger
                     if target_last_modified >= source_last_modified:
                         if not ((symlink and full_path and not os.path.islink(full_path)) or
                                 (not symlink and full_path and os.path.islink(full_path))):
                             if prefixed_path not in self.unmodified_files:
-                                self.unmodified_files.append(prefixed_path)
+                                self.unmodified_files.add(prefixed_path)
                             self.log(u"Skipping '%s' (not modified)" % path)
                             return False
+                    else:
+                        ## 检查md5 is_mac_os
+                        if full_path:
+                            source_path = source_storage.path(path)
+                            md51 = get_normalized_md5(source_path)
+                            md52 = get_normalized_md5(full_path)
+
+
+                            if md51 == md52:
+                                # git的分支切换可能会修改文件的时间
+                                self.log(u"Skipping '%s' (not modified)" % path)
+                                self.unmodified_files.add(prefixed_path)
+                                return False
+
+
             # Then delete the existing file if really needed
             if options['dry_run']:
                 self.log(u"Pretending to delete '%s'" % path)
@@ -175,7 +220,7 @@ Type 'yes' to continue, or 'no' to cancel: """)
                 pass
             os.symlink(source_path, full_path)
         if prefixed_path not in self.symlinked_files:
-            self.symlinked_files.append(prefixed_path)
+            self.symlinked_files.add(prefixed_path)
 
     def copy_file(self, path, prefixed_path, source_storage, **options):
         """
@@ -184,9 +229,11 @@ Type 'yes' to continue, or 'no' to cancel: """)
         # Skip this file if it was already copied earlier
         if prefixed_path in self.copied_files:
             return self.log(u"Skipping '%s' (already copied earlier)" % path)
+
         # Delete the target file if needed or break
         if not self.delete_file(path, prefixed_path, source_storage, **options):
             return
+
         # The full path of the source file
         source_path = source_storage.path(path)
         # Finally start copying
@@ -202,5 +249,6 @@ Type 'yes' to continue, or 'no' to cancel: """)
                     pass
             source_file = source_storage.open(path)
             self.storage.save(prefixed_path, source_file)
+
         if not prefixed_path in self.copied_files:
-            self.copied_files.append(prefixed_path)
+            self.copied_files.add(prefixed_path)

@@ -1,5 +1,6 @@
 # -*- coding:utf-8 -*-
 import unittest as real_unittest
+import time
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.db.models import get_app, get_apps
@@ -7,6 +8,10 @@ from django.test import _doctest as doctest
 from django.test.utils import setup_test_environment, teardown_test_environment
 from django.test.testcases import OutputChecker, DocTestRunner, TestCase
 from django.utils import unittest
+
+from colorama import init
+init()
+from colorama import Fore, Back, Style
 
 try:
     all
@@ -245,6 +250,8 @@ def traverse_test_suit(suit):
     return count
 
 
+
+
 class DjangoTestSuiteRunner(object):
     def __init__(self, verbosity=1, interactive=True, failfast=True, **kwargs):
         self.verbosity = verbosity
@@ -337,6 +344,8 @@ class DjangoTestSuiteRunner(object):
 
         # 准备做测试
         total_count = traverse_test_suit(suite)
+
+        # 直接注入
         from unittest import case
         case.test_case_current_index = 0
         case.test_case_total_count = total_count
