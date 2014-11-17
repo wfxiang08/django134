@@ -182,6 +182,9 @@ Type 'yes' to continue, or 'no' to cancel: """)
 
 
                             if md51 == md52:
+                                # 如何touch目标文件的修改时间(避免下次再次调用md5)
+                                os.utime(full_path, (source_last_modified, source_last_modified))
+
                                 # git的分支切换可能会修改文件的时间
                                 self.log(u"Skipping '%s' (not modified)" % path)
                                 self.unmodified_files.add(prefixed_path)
