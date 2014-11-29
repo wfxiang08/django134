@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 """
 Query subclasses which provide extra functionality beyond simple data retrieval.
 """
@@ -164,8 +165,11 @@ class InsertQuery(Query):
         placeholders, values = [], []
         for field, val in insert_values:
             placeholders.append((field, val))
+
+            # 添加 column, values
             self.columns.append(field.column)
             values.append(val)
+
         if raw_values:
             self.values.extend([(None, v) for v in values])
         else:

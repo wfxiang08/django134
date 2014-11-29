@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 """
 The main QuerySet implementation. This provides the public API for the ORM.
 """
@@ -1431,6 +1432,8 @@ def insert_query(model, values, return_id=False, raw_values=False, using=None):
     the InsertQuery class and is how Model.save() is implemented. It is not
     part of the public API.
     """
+    # 到底做什么了呢?
     query = sql.InsertQuery(model)
+
     query.insert_values(values, raw_values)
     return query.get_compiler(using=using).execute_sql(return_id)

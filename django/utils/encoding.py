@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 import types
 import urllib
 import locale
@@ -36,6 +37,7 @@ def smart_unicode(s, encoding='utf-8', strings_only=False, errors='strict'):
     if isinstance(s, Promise):
         # The input is the result of a gettext_lazy() call.
         return s
+
     return force_unicode(s, encoding, strings_only, errors)
 
 def is_protected_type(obj):
@@ -65,11 +67,14 @@ def force_unicode(s, encoding='utf-8', strings_only=False, errors='strict'):
         return s
     if strings_only and is_protected_type(s):
         return s
+
     try:
         if not isinstance(s, basestring,):
+            # 1. 调用  __unicode__
             if hasattr(s, '__unicode__'):
                 s = unicode(s)
             else:
+                # 2. 否则使用 str来转换
                 try:
                     s = unicode(str(s), encoding, errors)
                 except UnicodeEncodeError:

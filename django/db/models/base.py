@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 import types
 import sys
 from itertools import izip
@@ -420,10 +421,12 @@ class Model(object):
         return (model_unpickle, (model, defers, factory), data)
 
     def _get_pk_val(self, meta=None):
+        # 从meta中获取 pk的 attname, 并且读取出属性
         if not meta:
             meta = self._meta
         return getattr(self, meta.pk.attname)
 
+    # pk的类型是否有单独的处理呢?
     def _set_pk_val(self, value):
         return setattr(self, self._meta.pk.attname, value)
 
@@ -457,6 +460,7 @@ class Model(object):
         """
         if force_insert and force_update:
             raise ValueError("Cannot force both insert and updating in model saving.")
+
         self.save_base(using=using, force_insert=force_insert, force_update=force_update)
 
     save.alters_data = True
@@ -469,9 +473,11 @@ class Model(object):
         need for overrides of save() to pass around internal-only parameters
         ('raw', 'cls', and 'origin').
         """
+        # 1. 选择connection
         using = using or router.db_for_write(self.__class__, instance=self)
         connection = connections[using]
         assert not (force_insert and force_update)
+
         if cls is None:
             cls = self.__class__
             meta = cls._meta
@@ -509,29 +515,51 @@ class Model(object):
                 return
 
         if not meta.proxy:
+            # 正常的Model的保存
+
+            # 1. 读取所有的 non-primary key
             non_pks = [f for f in meta.local_fields if not f.primary_key]
 
             # First, try an UPDATE. If that doesn't update anything, do an INSERT.
             pk_val = self._get_pk_val(meta)
+
             pk_set = pk_val is not None
             record_exists = True
             manager = cls._base_manager
+
             if pk_set:
+                # 如果制定了PK
                 # Determine whether a record with the primary key already exists.
                 if (force_update or (not force_insert and
                         manager.using(using).filter(pk=pk_val).exists())):
+
                     # It does already exist, so do an UPDATE.
                     if force_update or non_pks:
+                        # (field, None, VALUE)
+                        # xx: (raw and getattr(self, f.attname) or f.pre_save(self, False))
+                        # f.pre_save(self, False)： 主要是 datetime相关的Field会做一个自动处理
+                        # auto_now字段，即便用户设置了，也是没有用的
+                        #
                         values = [(f, None, (raw and getattr(self, f.attname) or f.pre_save(self, False))) for f in non_pks]
+
+                        # 调用update来处理
+                        # pk_val的类型有影响吗?
                         rows = manager.using(using).filter(pk=pk_val)._update(values)
+
                         if force_update and not rows:
                             raise DatabaseError("Forced update did not affect any rows.")
                 else:
                     record_exists = False
+
+            # 没有指定 PK, 或者记录不存在
             if not pk_set or not record_exists:
+
+                # 如果指定了排序的字段
                 if meta.order_with_respect_to:
                     # If this is a model with an order_with_respect_to
                     # autopopulate the _order field
+
+                    # order_value的利弊?
                     field = meta.order_with_respect_to
                     order_value = manager.using(using).filter(**{field.name: getattr(self, field.attname)}).count()
                     self._order = order_value
@@ -539,15 +567,24 @@ class Model(object):
                 if not pk_set:
                     if force_update:
                         raise ValueError("Cannot force an update in save() with no primary key.")
-                    values = [(f, f.get_db_prep_save(raw and getattr(self, f.attname) or f.pre_save(self, True), connection=connection))
-                        for f in meta.local_fields if not isinstance(f, AutoField)]
+                    # f,
+                    # raw and getattr(self, f.attname) or f.pre_save(self, True) 待添加的Value
+                    # f.get_db_prep_save(, connection=connection)
+
+                    # 1. 首先经过 pre_save 处理
+                    # 2. 然后再经过 get_db_prep_save 标准化数据格式，并且转换成为数据库所需要的类型
+                    values = [(f, f.get_db_prep_save(raw and getattr(self, f.attname) or f.pre_save(self, True), connection=connection)) for f in meta.local_fields if not isinstance(f, AutoField)]
                 else:
-                    values = [(f, f.get_db_prep_save(raw and getattr(self, f.attname) or f.pre_save(self, True), connection=connection))
-                        for f in meta.local_fields]
+                    values = [(f, f.get_db_prep_save(raw and getattr(self, f.attname) or f.pre_save(self, True), connection=connection)) for f in meta.local_fields]
 
                 record_exists = False
 
                 update_pk = bool(meta.has_auto_field and not pk_set)
+
+                # values的默认值是如何处理的呢?
+                # 例如: user.first_name
+                #      user.last_name 默认为"", 但是我没有赋值，则应该如何处理呢?
+
                 if values:
                     # Create a new record.
                     result = manager._insert(values, return_id=update_pk, using=using)

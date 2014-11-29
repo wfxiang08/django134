@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 from django.core.exceptions import FieldError
 from django.db import connections
 from django.db.backends.util import truncate_name
@@ -721,6 +722,7 @@ class SQLCompiler(object):
         is needed, as the filters describe an empty set. In that case, None is
         returned, to avoid any unnecessary database interaction.
         """
+        # 首先可以得到: SQL + PARAMS
         try:
             sql, params = self.as_sql()
             if not sql:
@@ -731,6 +733,7 @@ class SQLCompiler(object):
             else:
                 return
 
+        # 通过Cursor来执行SQL+PARAMS
         cursor = self.connection.cursor()
         cursor.execute(sql, params)
 
@@ -757,10 +760,13 @@ class SQLCompiler(object):
 
 
 class SQLInsertCompiler(SQLCompiler):
+
     def placeholder(self, field, val):
         if field is None:
             # A field value of None means the value is raw.
             return val
+
+        # 特殊的Field, 暂时不用考虑
         elif hasattr(field, 'get_placeholder'):
             # Some fields (e.g. geo fields) need special munging before
             # they can be inserted.
@@ -774,27 +780,34 @@ class SQLInsertCompiler(SQLCompiler):
         # going to be column names (so we can avoid the extra overhead).
         qn = self.connection.ops.quote_name
         opts = self.query.model._meta
+
         result = ['INSERT INTO %s' % qn(opts.db_table)]
+
+        # INSERT INTO TABLE_NAME(col1, col2, col3) VALUES(%s, %s, %s)
         result.append('(%s)' % ', '.join([qn(c) for c in self.query.columns]))
         values = [self.placeholder(*v) for v in self.query.values]
         result.append('VALUES (%s)' % ', '.join(values))
+
         params = self.query.params
         if self.return_id and self.connection.features.can_return_id_from_insert:
+
             col = "%s.%s" % (qn(opts.db_table), qn(opts.pk.column))
             r_fmt, r_params = self.connection.ops.return_insert_id()
+
             result.append(r_fmt % col)
             params = params + r_params
         return ' '.join(result), params
 
     def execute_sql(self, return_id=False):
         self.return_id = return_id
+        # 首先执行
         cursor = super(SQLInsertCompiler, self).execute_sql(None)
+
         if not (return_id and cursor):
             return
         if self.connection.features.can_return_id_from_insert:
             return self.connection.ops.fetch_returned_insert_id(cursor)
-        return self.connection.ops.last_insert_id(cursor,
-                self.query.model._meta.db_table, self.query.model._meta.pk.column)
+        return self.connection.ops.last_insert_id(cursor, self.query.model._meta.db_table, self.query.model._meta.pk.column)
 
 
 class SQLDeleteCompiler(SQLCompiler):

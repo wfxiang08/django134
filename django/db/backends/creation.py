@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 import sys
 import time
 
@@ -243,8 +244,11 @@ class BaseDatabaseCreation(object):
 
     def sql_indexes_for_model(self, model, style):
         "Returns the CREATE INDEX SQL statements for a single model"
+
+        # 注意两个属性的意义
         if not model._meta.managed or model._meta.proxy:
             return []
+
         output = []
         for f in model._meta.local_fields:
             output.extend(self.sql_indexes_for_field(model, f, style))
@@ -254,8 +258,13 @@ class BaseDatabaseCreation(object):
         "Return the CREATE INDEX SQL statements for a single model field"
         from django.db.backends.util import truncate_name
 
+        #
+        # 针对单个 index如何处理呢?
+        # 有索引，但是不unique
+        #
         if f.db_index and not f.unique:
             qn = self.connection.ops.quote_name
+            # 对于MySQL tablespace_sql为""
             tablespace = f.db_tablespace or model._meta.db_tablespace
             if tablespace:
                 sql = self.connection.ops.tablespace_sql(tablespace)
@@ -265,6 +274,8 @@ class BaseDatabaseCreation(object):
                     tablespace_sql = ''
             else:
                 tablespace_sql = ''
+
+            # INDEX的名字
             i_name = '%s_%s' % (model._meta.db_table, self._digest(f.column))
             output = [style.SQL_KEYWORD('CREATE INDEX') + ' ' +
                 style.SQL_TABLE(qn(truncate_name(i_name, self.connection.ops.max_name_length()))) + ' ' +

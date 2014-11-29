@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 import inspect
 import os
 
@@ -88,6 +89,7 @@ class ConnectionHandler(object):
         if alias in self._connections:
             return self._connections[alias]
 
+        # 不存在的alias, 则使用空数据库
         self.ensure_defaults(alias)
         db = self.databases[alias]
         backend = load_backend(db['ENGINE'])
@@ -103,10 +105,17 @@ class ConnectionHandler(object):
 
 
 class ConnectionRouter(object):
+    """
+        如何处理数据库的Router呢?
+
+        如果 routers为空，又怎么办呢?
+    """
     def __init__(self, routers):
         self.routers = []
         for r in routers:
             if isinstance(r, basestring):
+
+                # 如何加载一个Class? 首先加载Module, 然后再加载Class
                 try:
                     module_name, klass_name = r.rsplit('.', 1)
                     module = import_module(module_name)
@@ -122,8 +131,10 @@ class ConnectionRouter(object):
                 router = r
             self.routers.append(router)
 
+    # 可以在Class内部定义非成员变量，关键是看如何"对待" self, action等参数
     def _router_func(action):
         def _route_db(self, model, **hints):
+            # 调用 router的 db_for_read(model, **hints)等方法
             chosen_db = None
             for router in self.routers:
                 try:
@@ -135,6 +146,8 @@ class ConnectionRouter(object):
                     chosen_db = method(model, **hints)
                     if chosen_db:
                         return chosen_db
+
+            # 如果失败，则继续使用 _state.db或者默认的db
             try:
                 return hints['instance']._state.db or DEFAULT_DB_ALIAS
             except KeyError:

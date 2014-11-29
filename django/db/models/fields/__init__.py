@@ -1,3 +1,5 @@
+# -*- coding:utf-8 -*-
+
 import datetime
 import decimal
 import re
@@ -253,7 +255,9 @@ class Field(object):
         return self.__class__.__name__
 
     def pre_save(self, model_instance, add):
-        "Returns field's value just before saving."
+        """Returns field's value just before saving.
+            默认就是直接读取 attname对应的value
+        """
         return getattr(model_instance, self.attname)
 
     def get_prep_value(self, value):
@@ -523,6 +527,9 @@ class BooleanField(Field):
         return super(BooleanField, self).get_prep_lookup(lookup_type, value)
 
     def get_prep_value(self, value):
+        """
+            做类型转换
+        """
         if value is None:
             return None
         return bool(value)
@@ -549,6 +556,9 @@ class CharField(Field):
         return "CharField"
 
     def to_python(self, value):
+        """
+            强制转换成为 unicode字符串
+        """
         if isinstance(value, basestring) or value is None:
             return value
         return smart_unicode(value)
@@ -621,11 +631,18 @@ class DateField(Field):
             raise exceptions.ValidationError(msg)
 
     def pre_save(self, model_instance, add):
+        """
+            auto_now
+            auto_now_add的区别
+
+            前者只要有save, 就自动更新；后者在save时才更新
+        """
         if self.auto_now or (self.auto_now_add and add):
             value = datetime.date.today()
             setattr(model_instance, self.attname, value)
             return value
         else:
+            # 默认读取旧的value
             return super(DateField, self).pre_save(model_instance, add)
 
     def contribute_to_class(self, cls, name):
@@ -672,6 +689,9 @@ class DateTimeField(DateField):
     description = _("Date (with time)")
 
     def get_internal_type(self):
+        """
+            通过internal_type实现和MySQL等数据库的类型映射
+        """
         return "DateTimeField"
 
     def to_python(self, value):
@@ -679,6 +699,8 @@ class DateTimeField(DateField):
             return value
         if isinstance(value, datetime.datetime):
             return value
+
+        # 类型的转换
         if isinstance(value, datetime.date):
             return datetime.datetime(value.year, value.month, value.day)
 
@@ -710,11 +732,13 @@ class DateTimeField(DateField):
                     raise exceptions.ValidationError(self.error_messages['invalid'])
 
     def pre_save(self, model_instance, add):
+        # 和 DateField基本相似
         if self.auto_now or (self.auto_now_add and add):
             value = datetime.datetime.now()
             setattr(model_instance, self.attname, value)
             return value
         else:
+            # 基本上直接调用 Field#pre_save()
             return super(DateTimeField, self).pre_save(model_instance, add)
 
     def get_prep_value(self, value):
@@ -1087,6 +1111,9 @@ class TimeField(Field):
                 raise exceptions.ValidationError(self.error_messages['invalid'])
 
     def pre_save(self, model_instance, add):
+        """
+            同 DateField等
+        """
         if self.auto_now or (self.auto_now_add and add):
             value = datetime.datetime.now().time()
             setattr(model_instance, self.attname, value)

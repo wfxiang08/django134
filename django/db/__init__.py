@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 from django.conf import settings
 from django.core import signals
 from django.core.exceptions import ImproperlyConfigured
@@ -19,6 +20,7 @@ if not settings.DATABASES:
             DeprecationWarning
         )
 
+    # 旧版本的配置(IGNORE)
     settings.DATABASES[DEFAULT_DB_ALIAS] = {
         'ENGINE': settings.DATABASE_ENGINE,
         'HOST': settings.DATABASE_HOST,
@@ -75,6 +77,9 @@ router = ConnectionRouter(settings.DATABASE_ROUTERS)
 # by the PostgreSQL backends.
 # we load all these up for backwards compatibility, you should use
 # connections['default'] instead.
+#
+# 默认的数据连接以及对应的backend
+#
 connection = connections[DEFAULT_DB_ALIAS]
 backend = load_backend(connection.settings_dict['ENGINE'])
 
