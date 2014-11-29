@@ -493,7 +493,11 @@ class DictWrapper(dict):
             key = key[len(self.prefix):]
         else:
             use_func = False
+
+        # 前缀的作用?
         value = super(DictWrapper, self).__getitem__(key)
+
+        # 调用func
         if use_func:
             return self.func(value)
         return value
