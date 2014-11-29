@@ -18,6 +18,15 @@ class DatabaseError(Exception):
 class IntegrityError(DatabaseError):
     pass
 
+def get_stack_info():
+    import inspect
+    stacks = inspect.stack()
+    results = []
+    for stack in stacks:
+        # filename, lineno, function, code_context, index
+        func_name = "%s %s %s" % (stack[1], stack[3], stack[2])
+        results.append(func_name)
+    return "\n".join(results)
 
 def load_backend(backend_name):
     try:

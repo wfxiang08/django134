@@ -47,25 +47,30 @@ class BaseDatabaseCreation(object):
                 # database columns in this table.
                 continue
             # Make the definition (e.g. 'foo VARCHAR(30)') for this field.
-            field_output = [style.SQL_FIELD(qn(f.column)),
-                style.SQL_COLTYPE(col_type)]
+            field_output = [style.SQL_FIELD(qn(f.column)), style.SQL_COLTYPE(col_type)]
             if not f.null:
                 field_output.append(style.SQL_KEYWORD('NOT NULL'))
             if f.primary_key:
                 field_output.append(style.SQL_KEYWORD('PRIMARY KEY'))
             elif f.unique:
                 field_output.append(style.SQL_KEYWORD('UNIQUE'))
+
+            # tablespace 对Orcal有效
             if tablespace and f.unique:
                 # We must specify the index tablespace inline, because we
                 # won't be generating a CREATE INDEX statement for this field.
                 field_output.append(self.connection.ops.tablespace_sql(tablespace, inline=True))
+
             if f.rel:
                 ref_output, pending = self.sql_for_inline_foreign_key_references(f, known_models, style)
                 if pending:
                     pr = pending_references.setdefault(f.rel.to, []).append((model, f))
                 else:
                     field_output.extend(ref_output)
+
             table_output.append(' '.join(field_output))
+
+
         for field_constraints in opts.unique_together:
             table_output.append(style.SQL_KEYWORD('UNIQUE') + ' (%s)' % \
                 ", ".join([style.SQL_FIELD(qn(opts.get_field(f).column)) for f in field_constraints]))
@@ -249,6 +254,7 @@ class BaseDatabaseCreation(object):
         if not model._meta.managed or model._meta.proxy:
             return []
 
+        # 其他的: index_together
         output = []
         for f in model._meta.local_fields:
             output.extend(self.sql_indexes_for_field(model, f, style))

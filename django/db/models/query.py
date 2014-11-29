@@ -358,6 +358,7 @@ class QuerySet(object):
         """
         obj = self.model(**kwargs)
         self._for_write = True
+
         obj.save(force_insert=True, using=self.db)
         return obj
 

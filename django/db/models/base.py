@@ -2,6 +2,7 @@
 import types
 import sys
 from itertools import izip
+from django.db.utils import get_stack_info
 
 import django.db.models.manager     # Imported to register signal handler.
 from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned, FieldError, ValidationError, NON_FIELD_ERRORS
@@ -24,26 +25,54 @@ from django.utils.encoding import smart_str, force_unicode
 from django.utils.text import get_text_list, capfirst
 from django.conf import settings
 
+printed = False
 class ModelBase(type):
     """
-    Metaclass for all models.
+        Metaclass for all models.
+        创建类的类 MetaClass
+        参考: https://www.evernote.com/shard/s91/sh/186e4026-3cb2-43e9-ad77-48378676fa79/8ed12137de7de305f7d5959fe14af4ca
     """
     def __new__(cls, name, bases, attrs):
+        # cls 应该就是 ModelBase
         super_new = super(ModelBase, cls).__new__
+        # global  printed
+        # if not printed:
+        #     printed = True
+        #     print get_stack_info()
+        #     print "Class: ", cls
+        #     print "Name: ", name
+        #     print "bases: ", bases
+        #     print "attrs: ", attrs
+
         parents = [b for b in bases if isinstance(b, ModelBase)]
         if not parents:
             # If this isn't a subclass of Model, don't do anything special.
+            # 直接调用: type来生成一个Class
             return super_new(cls, name, bases, attrs)
 
         # Create the class.
         module = attrs.pop('__module__')
+
+        # 1. 调用type生成了一个 Model Class
         new_class = super_new(cls, name, bases, {'__module__': module})
+        # new_class 为Model Class, 同时也是Model Base的实例，可以共享它的方法
+
+
+        # 2.
+        # class Meta:
+        #   unique_together = ("user", "vip_type")
         attr_meta = attrs.pop('Meta', None)
+
+        # abstract不可继承，因此直接从attr_meta读取，不管是否为None
         abstract = getattr(attr_meta, 'abstract', False)
+
+        # New Class已经创建好，可以通过继承关系读取Base Class的Meta属性
         if not attr_meta:
             meta = getattr(new_class, 'Meta', None)
         else:
             meta = attr_meta
+
+        # _meta如何处理呢?
         base_meta = getattr(new_class, '_meta', None)
 
         if getattr(meta, 'app_label', None) is None:
@@ -54,20 +83,26 @@ class ModelBase(type):
         else:
             kwargs = {}
 
+        # base_meta, _meta
+        # kwargs最多只有一个参数; app_label
+        # _meta一方面从Options获取数据，另一方面从_new_class中获取信息： contribute_to_class
         new_class.add_to_class('_meta', Options(meta, **kwargs))
+
+
         if not abstract:
+            # 添加 DoesNotExist, MultipleObjectReturned Exception
             new_class.add_to_class('DoesNotExist', subclass_exception('DoesNotExist',
-                    tuple(x.DoesNotExist
-                            for x in parents if hasattr(x, '_meta') and not x._meta.abstract)
-                                    or (ObjectDoesNotExist,), module))
+                    tuple(x.DoesNotExist for x in parents if hasattr(x, '_meta') and not x._meta.abstract) or (ObjectDoesNotExist,), module))
             new_class.add_to_class('MultipleObjectsReturned', subclass_exception('MultipleObjectsReturned',
-                    tuple(x.MultipleObjectsReturned
-                            for x in parents if hasattr(x, '_meta') and not x._meta.abstract)
-                                    or (MultipleObjectsReturned,), module))
+                    tuple(x.MultipleObjectsReturned for x in parents if hasattr(x, '_meta') and not x._meta.abstract) or (MultipleObjectsReturned,), module))
+
             if base_meta and not base_meta.abstract:
                 # Non-abstract child classes inherit some attributes from their
                 # non-abstract parent (unless an ABC comes before it in the
                 # method resolution order).
+                #
+                # 通过Meta来继承一些属性
+                #
                 if not hasattr(meta, 'ordering'):
                     new_class._meta.ordering = base_meta.ordering
                 if not hasattr(meta, 'get_latest_by'):
@@ -76,6 +111,7 @@ class ModelBase(type):
         is_proxy = new_class._meta.proxy
 
         if getattr(new_class, '_default_manager', None):
+            # PROXY的处理
             if not is_proxy:
                 # Multi-table inheritance doesn't inherit default manager from
                 # parents.
@@ -93,13 +129,18 @@ class ModelBase(type):
             return m
 
         # Add all attributes to the class.
+        # 完善Model Class
         for obj_name, obj in attrs.items():
             new_class.add_to_class(obj_name, obj)
 
         # All the fields of any type declared on this model
-        new_fields = new_class._meta.local_fields + \
-                     new_class._meta.local_many_to_many + \
-                     new_class._meta.virtual_fields
+        # _meta中的 local_fields从何处来?
+        #
+        # new_class.add_to_class('_meta', Options(meta, **kwargs))
+        #
+        # _meta的创建
+        #
+        new_fields = new_class._meta.local_fields + new_class._meta.local_many_to_many + new_class._meta.virtual_fields
         field_names = set([f.name for f in new_fields])
 
         # Basic setup for proxy models.
@@ -125,8 +166,7 @@ class ModelBase(type):
             new_class._meta.setup_proxy(base)
 
         # Do the appropriate setup for any model parents.
-        o2o_map = dict([(f.rel.to, f) for f in new_class._meta.local_fields
-                if isinstance(f, OneToOneField)])
+        o2o_map = dict([(f.rel.to, f) for f in new_class._meta.local_fields if isinstance(f, OneToOneField)])
 
         for base in parents:
             original_base = base
@@ -195,17 +235,22 @@ class ModelBase(type):
             return new_class
 
         new_class._prepare()
+
+        # 准备Models到cache中
         register_models(new_class._meta.app_label, new_class)
 
         # Because of the way imports happen (recursively), we may or may not be
         # the first time this model tries to register with the framework. There
         # should only be one class for each model, so we always return the
         # registered version.
+
+        # 从cache中读取出model
         return get_model(new_class._meta.app_label, name, False)
 
     def copy_managers(cls, base_managers):
         # This is in-place sorting of an Options attribute, but that's fine.
         base_managers.sort()
+
         for _, mgr_name, manager in base_managers:
             val = getattr(cls, mgr_name, None)
             if not val or val is manager:
@@ -213,6 +258,7 @@ class ModelBase(type):
                 cls.add_to_class(mgr_name, new_manager)
 
     def add_to_class(cls, name, value):
+        # 特殊的方法? contribute_to_class
         if hasattr(value, 'contribute_to_class'):
             value.contribute_to_class(cls, name)
         else:
@@ -223,8 +269,11 @@ class ModelBase(type):
         Creates some methods once self._meta has been populated.
         """
         opts = cls._meta
+
+        # 准备: pk
         opts._prepare(cls)
 
+        # order_with_respect_to 假设都没有定义
         if opts.order_with_respect_to:
             cls.get_next_in_order = curry(cls._get_next_or_previous_in_order, is_next=True)
             cls.get_previous_in_order = curry(cls._get_next_or_previous_in_order, is_next=False)
@@ -270,11 +319,22 @@ class ModelState(object):
         self.adding = True
 
 class Model(object):
+    # 研究一下 metaclass
+    # 在这个地方会触发一个 class的 __new__操作, 当前Model被当做一个Dict, 交给 ModelBase去初始化
     __metaclass__ = ModelBase
     _deferred = False
 
     def __init__(self, *args, **kwargs):
         signals.pre_init.send(sender=self.__class__, args=args, kwargs=kwargs)
+
+        """
+            一个Django Model的实例到底有哪些内存上的开销呢?
+
+            基本对象的开销
+            _state
+            field对应的attributes
+
+        """
 
         # Set up the storage for instance state
         self._state = ModelState()
@@ -283,12 +343,16 @@ class Model(object):
         # overrides it. It should be one or the other; don't duplicate the work
         # The reason for the kwargs check is that standard iterator passes in by
         # args, and instantiation for iteration is 33% faster.
+
+        # 判断参数的有效性
         args_len = len(args)
         if args_len > len(self._meta.fields):
             # Daft, but matches old exception sans the err msg.
             raise IndexError("Number of args exceeds number of fields")
 
         fields_iter = iter(self._meta.fields)
+
+        # args 和 fields_iter的对应关系, 似乎不好确定?
         if not kwargs:
             # The ordering of the izip calls matter - izip throws StopIteration
             # when an iter throws it. So if the first iter throws it, the second
@@ -305,11 +369,14 @@ class Model(object):
                 if isinstance(field.rel, ManyToOneRel):
                     kwargs.pop(field.attname, None)
 
+        # 一般情况下: args 为空，都是通过 kwargs来传递参数
+
         # Now we're left with the unprocessed fields that *must* come from
         # keywords, or default.
 
         for field in fields_iter:
             is_related_object = False
+
             # This slightly odd construct is so that we can access any
             # data-descriptor object (DeferredAttribute) without triggering its
             # __get__ method.
@@ -317,6 +384,8 @@ class Model(object):
                     isinstance(self.__class__.__dict__.get(field.attname), DeferredAttribute)):
                 # This field will be populated on request.
                 continue
+
+
             if kwargs:
                 if isinstance(field.rel, ManyToOneRel):
                     try:
@@ -344,7 +413,9 @@ class Model(object):
                         # Refs #12057.
                         val = field.get_default()
             else:
+                # 如果没有参数，则直接选取默认值
                 val = field.get_default()
+
             if is_related_object:
                 # If we are passed a related instance, set it using the
                 # field.name instead of field.attname (e.g. "user" instead of
@@ -363,6 +434,8 @@ class Model(object):
                     pass
             if kwargs:
                 raise TypeError("'%s' is an invalid keyword argument for this function" % kwargs.keys()[0])
+
+        # 后调用: super
         super(Model, self).__init__()
         signals.post_init.send(sender=self.__class__, instance=self)
 

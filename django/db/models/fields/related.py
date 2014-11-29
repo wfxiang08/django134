@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 from django.conf import settings
 from django.db import connection, router, transaction
 from django.db.backends import util
@@ -815,7 +816,11 @@ class ForeignKey(RelatedField, Field):
         'invalid': _('Model %(model)s with pk %(pk)r does not exist.')
     }
     description = _("Foreign Key (type determined by related field)")
+
     def __init__(self, to, to_field=None, rel_class=ManyToOneRel, **kwargs):
+        # user = ForeignKey(User, help_text='充值的用户')
+        # 一般情况下, to为一个Model; to_field为None
+        #
         try:
             to_name = to._meta.object_name.lower()
         except AttributeError: # to._meta doesn't exist, so it must be RECURSIVE_RELATIONSHIP_CONSTANT
@@ -825,9 +830,13 @@ class ForeignKey(RelatedField, Field):
             # For backwards compatibility purposes, we need to *try* and set
             # the to_field during FK construction. It won't be guaranteed to
             # be correct until contribute_to_class is called. Refs #12190.
+
+            # 如果没有设置 to_field, 则默认为 pk
             to_field = to_field or (to._meta.pk and to._meta.pk.name)
+
         kwargs['verbose_name'] = kwargs.get('verbose_name', None)
 
+        # 如果没有设置 db_index, 则默认为 True
         if 'db_index' not in kwargs:
             kwargs['db_index'] = True
 

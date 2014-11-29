@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 import re
 from bisect import bisect
 
@@ -60,6 +61,9 @@ class Options(object):
         self.related_fkey_lookups = []
 
     def contribute_to_class(self, cls, name):
+        """
+            将cls中的信息保存到当前的Options中，并且整个Options最终作为cls.name
+        """
         from django.db import connection
         from django.db.backends.util import truncate_name
 
@@ -72,16 +76,26 @@ class Options(object):
 
         # Next, apply any overridden values from 'class Meta'.
         if self.meta:
+
+            # 从 BaseClass 获取 meta信息
+            # 后面由于需要从 meta_attrs中删除对象，因此调用 copy(防止基类被修改)
             meta_attrs = self.meta.__dict__.copy()
+
+            # 不继承 _xxx
             for name in self.meta.__dict__:
                 # Ignore any private attributes that Django doesn't care about.
                 # NOTE: We can't modify a dictionary's contents while looping
                 # over it, so we loop over the *original* dictionary instead.
                 if name.startswith('_'):
                     del meta_attrs[name]
+
+            # 将default_names从 meta_attrs中拷贝到Options
             for attr_name in DEFAULT_NAMES:
                 if attr_name in meta_attrs:
                     setattr(self, attr_name, meta_attrs.pop(attr_name))
+                #
+                # 会有什么样的数据在 meta_attrs 中不存在，但是在 self.meta 中存在?
+                #
                 elif hasattr(self.meta, attr_name):
                     setattr(self, attr_name, getattr(self.meta, attr_name))
 
@@ -91,10 +105,16 @@ class Options(object):
             ut = meta_attrs.pop('unique_together', self.unique_together)
             if ut and not isinstance(ut[0], (tuple, list)):
                 ut = (ut,)
+
+            # unique_together = ("aa", "bb")
+            # unique_together = [("aa", "bb"), ("cc", "dd")]
+
+            # 现在将他格式表转化: ((,),)
             self.unique_together = ut
 
             # verbose_name_plural is a special case because it uses a 's'
             # by default.
+            # 复数形式如何处理
             if self.verbose_name_plural is None:
                 self.verbose_name_plural = string_concat(self.verbose_name, 's')
 
@@ -103,9 +123,12 @@ class Options(object):
                 raise TypeError("'class Meta' got invalid attribute(s): %s" % ','.join(meta_attrs.keys()))
         else:
             self.verbose_name_plural = string_concat(self.verbose_name, 's')
+
+        # self.meta的信息使用完毕，不再需要
         del self.meta
 
         # If the db_table wasn't provided, use the app_label + module_name.
+        # table的名字
         if not self.db_table:
             self.db_table = "%s_%s" % (self.app_label, self.module_name)
             self.db_table = truncate_name(self.db_table, connection.ops.max_name_length())

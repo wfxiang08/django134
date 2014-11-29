@@ -236,6 +236,8 @@ class Field(object):
     def contribute_to_class(self, cls, name):
         self.set_attributes_from_name(name)
         self.model = cls
+
+        #  将field添加到cls._meta中
         cls._meta.add_field(self)
         if self.choices:
             setattr(cls, 'get_%s_display' % self.name, curry(cls._get_FIELD_display, field=self))
