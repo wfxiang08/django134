@@ -53,16 +53,20 @@ class SQLCompiler(object):
         If 'with_limits' is False, any limit/offset information is not included
         in the query.
         """
+        # 如何生成MySQL呢?
         if with_limits and self.query.low_mark == self.query.high_mark:
             return '', ()
 
         self.pre_sql_setup()
+
         out_cols = self.get_columns(with_col_aliases)
         ordering, ordering_group_by = self.get_ordering()
 
         # This must come after 'select' and 'ordering' -- see docstring of
         # get_from_clause() for details.
         from_, f_params = self.get_from_clause()
+
+        # print "FROM: ", " ".join(from_), " ".join(f_params)
 
         qn = self.quote_name_unless_alias
 
@@ -72,6 +76,7 @@ class SQLCompiler(object):
         for val in self.query.extra_select.itervalues():
             params.extend(val[1])
 
+        # 构建基本的SELECT语句
         result = ['SELECT']
         if self.query.distinct:
             result.append('DISTINCT')
@@ -84,6 +89,8 @@ class SQLCompiler(object):
         if where:
             result.append('WHERE %s' % where)
             params.extend(w_params)
+
+        # print "SQL: ", " ".join(result)
 
         grouping, gb_params = self.get_grouping()
         if grouping:
@@ -148,12 +155,15 @@ class SQLCompiler(object):
         """
         qn = self.quote_name_unless_alias
         qn2 = self.connection.ops.quote_name
+
         result = ['(%s) AS %s' % (col[0], qn2(alias)) for alias, col in self.query.extra_select.iteritems()]
+
         aliases = set(self.query.extra_select.keys())
         if with_aliases:
             col_aliases = aliases.copy()
         else:
             col_aliases = set()
+
         if self.query.select:
             only_load = self.deferred_to_columns()
             for col in self.query.select:
@@ -430,28 +440,40 @@ class SQLCompiler(object):
         might change the tables we need. This means the select columns and
         ordering must be done first.
         """
+        # 如何处理FROM呢?
         result = []
         qn = self.quote_name_unless_alias
         qn2 = self.connection.ops.quote_name
         first = True
+
+        # print "Tables: ", " ".join(self.query.tables)
+        # print "extra_tables: ", " ".join(self.query.extra_tables)
+
         for alias in self.query.tables:
+            # 统计query中的tables的引用次数
             if not self.query.alias_refcount[alias]:
                 continue
+
+            # 获取 join的类型
             try:
                 name, alias, join_type, lhs, lhs_col, col, nullable = self.query.alias_map[alias]
             except KeyError:
                 # Extra tables can end up in self.tables, but not in the
                 # alias_map if they aren't in a join. That's OK. We skip them.
                 continue
+
             alias_str = (alias != name and ' %s' % alias or '')
+
+
             if join_type and not first:
-                result.append('%s %s%s ON (%s.%s = %s.%s)'
-                        % (join_type, qn(name), alias_str, qn(lhs),
-                           qn2(lhs_col), qn(alias), qn2(col)))
+                # 例如:
+                #   LEFT OUTER JOIN "auth_user" ON ("api_usertaginfo"."user_id" = "auth_user"."id")
+                result.append('%s %s%s ON (%s.%s = %s.%s)' % (join_type, qn(name), alias_str, qn(lhs), qn2(lhs_col), qn(alias), qn2(col)))
             else:
                 connector = not first and ', ' or ''
                 result.append('%s%s%s' % (connector, qn(name), alias_str))
             first = False
+
         for t in self.query.extra_tables:
             alias, unused = self.query.table_alias(t)
             # Only add the alias if it's not already present (the table_alias()
@@ -675,11 +697,24 @@ class SQLCompiler(object):
         """
         Returns an iterator over the results from executing this query.
         """
+
+        # 如何获取 result set iterator?
+
         resolve_columns = hasattr(self, 'resolve_columns')
         fields = None
         has_aggregate_select = bool(self.query.aggregate_select)
+
+        #
+        # rows
+        # row的关系?
+        #
+        # rows表示每次批量读取一批数据
         for rows in self.execute_sql(MULTI):
+
+            # 批量读取完毕之后，再逐行处理
             for row in rows:
+
+                # 读取原始的数据
                 if resolve_columns:
                     if fields is None:
                         # We only set this up here because
@@ -694,18 +729,23 @@ class SQLCompiler(object):
                         only_load = self.deferred_to_columns()
                         if only_load:
                             db_table = self.query.model._meta.db_table
-                            fields = [f for f in fields if db_table in only_load and
-                                      f.column in only_load[db_table]]
+                            fields = [f for f in fields if db_table in only_load and f.column in only_load[db_table]]
                     row = self.resolve_columns(row, fields)
 
+                # TODO: has_aggregate_select
+                # 暂不考虑这部分的逻辑
+                # 处理相关的数据
+                #
                 if has_aggregate_select:
                     aggregate_start = len(self.query.extra_select.keys()) + len(self.query.select)
                     aggregate_end = aggregate_start + len(self.query.aggregate_select)
-                    row = tuple(row[:aggregate_start]) + tuple([
-                        self.query.resolve_aggregate(value, aggregate, self.connection)
-                        for (alias, aggregate), value
-                        in zip(self.query.aggregate_select.items(), row[aggregate_start:aggregate_end])
-                    ]) + tuple(row[aggregate_end:])
+                    # row的组成
+                    #
+                    # [0, aggregate_start) [aggregate_start, aggregate_end), [aggregate_end, )
+                    #
+                    row = tuple(row[:aggregate_start]) + \
+                          tuple([self.query.resolve_aggregate(value, aggregate, self.connection) for (alias, aggregate), value in zip(self.query.aggregate_select.items(), row[aggregate_start:aggregate_end])]) + \
+                          tuple(row[aggregate_end:])
 
                 yield row
 
@@ -737,8 +777,11 @@ class SQLCompiler(object):
         cursor = self.connection.cursor()
         cursor.execute(sql, params)
 
+        # 如果没有类型，则直接返回
         if not result_type:
             return cursor
+
+        # 如果只有一条结果，则直接返回 ROW
         if result_type == SINGLE:
             if self.query.ordering_aliases:
                 return cursor.fetchone()[:-len(self.query.ordering_aliases)]
@@ -749,8 +792,10 @@ class SQLCompiler(object):
             result = order_modified_iter(cursor, len(self.query.ordering_aliases),
                     self.connection.features.empty_fetchmany_value)
         else:
-            result = iter((lambda: cursor.fetchmany(GET_ITERATOR_CHUNK_SIZE)),
-                    self.connection.features.empty_fetchmany_value)
+            # 多行结果, 没有 ordering
+            # 返回一个iterator
+            result = iter((lambda: cursor.fetchmany(GET_ITERATOR_CHUNK_SIZE)), self.connection.features.empty_fetchmany_value)
+
         if not self.connection.features.can_use_chunked_reads:
             # If we are using non-chunked reads, we return the same data
             # structure as normally, but ensure it is all read into memory

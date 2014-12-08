@@ -33,7 +33,10 @@ class QuerySet(object):
         self.model = model
         # EmptyQuerySet instantiates QuerySet with model as None
         self._db = using
+
+        # query是什么东西呢?
         self.query = query or sql.Query(self.model)
+
         self._result_cache = None
         self._iter = None
         self._sticky_filter = False
@@ -89,8 +92,10 @@ class QuerySet(object):
         if self._result_cache is None:
             self._iter = self.iterator()
             self._result_cache = []
+
         if self._iter:
             return self._result_iter()
+
         # Python's list iterator is better than our version when we're just
         # iterating over the cache.
         return iter(self._result_cache)
@@ -270,8 +275,13 @@ class QuerySet(object):
         # Cache db and model outside the loop
         db = self.db
         model = self.model
+
+        # 看看Query是如何作用的?
         compiler = self.query.get_compiler(using=db)
+
+
         for row in compiler.results_iter():
+
             if fill_cache:
                 obj, _ = get_cached_row(model, row,
                             index_start, using=db, max_depth=max_depth,
@@ -564,9 +574,13 @@ class QuerySet(object):
                     "Cannot filter a query once a slice has been taken."
 
         clone = self._clone()
+
+        # 将所有的参数交给Q去处理
         if negate:
             clone.query.add_q(~Q(*args, **kwargs))
         else:
+            # 最终的查询条件都转移到Q中了
+            # 注意: sql/query.py 中的方法
             clone.query.add_q(Q(*args, **kwargs))
         return clone
 
@@ -753,6 +767,8 @@ class QuerySet(object):
     def _clone(self, klass=None, setup=False, **kwargs):
         if klass is None:
             klass = self.__class__
+
+        # 每次QuerySet的操作都会创建一个新的QuerySet
         query = self.query.clone()
         if self._sticky_filter:
             query.filter_is_sticky = True
@@ -936,6 +952,7 @@ class ValuesQuerySet(QuerySet):
             raise TypeError('Cannot use a multi-field %s as a filter value.'
                     % self.__class__.__name__)
 
+        # 直接获取SQL表达
         obj = self._clone()
         if obj._db is None or connection == connections[obj._db]:
             return obj.query.get_compiler(connection=connection).as_nested_sql()

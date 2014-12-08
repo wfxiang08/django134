@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 """
 A class for storing a tree graph. Primarily used for filter constructs in the
 ORM.
@@ -15,6 +16,10 @@ class Node(object):
     # subclasses will usually override the value.
     default = 'DEFAULT'
 
+    # Q def __init__(self, *args, **kwargs):
+    #       super(Q, self).__init__(children=list(args) + kwargs.items())
+    # children的组成: list([(key, value)])
+    #
     def __init__(self, children=None, connector=None, negated=False):
         """
         Constructs a new Node. If no connector is given, the default will be
@@ -92,14 +97,18 @@ class Node(object):
         if len(self.children) < 2:
             self.connector = conn_type
         if self.connector == conn_type:
-            if isinstance(node, Node) and (node.connector == conn_type or
-                    len(node) == 1):
+
+            # 如果node为Node类型，并且内部的conn_type相同, 则直接合并所有的children
+            if isinstance(node, Node) and (node.connector == conn_type or len(node) == 1):
                 self.children.extend(node.children)
             else:
+                # 否则直接添加node
                 self.children.append(node)
         else:
-            obj = self._new_instance(self.children, self.connector,
-                    self.negated)
+            #  如果两个类型不一样
+            #  (a or b or c)   AND d
+            #  (a and b and c) OR d
+            obj = self._new_instance(self.children, self.connector, self.negated)
             self.connector = conn_type
             self.children = [obj, node]
 
@@ -113,8 +122,7 @@ class Node(object):
         Interpreting the meaning of this negate is up to client code. This
         method is useful for implementing "not" arrangements.
         """
-        self.children = [self._new_instance(self.children, self.connector,
-                not self.negated)]
+        self.children = [self._new_instance(self.children, self.connector, not self.negated)]
         self.connector = self.default
 
     def start_subtree(self, conn_type):
@@ -123,16 +131,17 @@ class Node(object):
         current node. The conn_type specifies how the sub-tree is joined to the
         existing children.
         """
+        # 强制将以前的所有的节点合并成为一个"独立的节点"
+        # 准备活动
         if len(self.children) == 1:
             self.connector = conn_type
         elif self.connector != conn_type:
-            self.children = [self._new_instance(self.children, self.connector,
-                    self.negated)]
+            # 将已有的节点合并成为一个节点
+            self.children = [self._new_instance(self.children, self.connector, self.negated)]
             self.connector = conn_type
             self.negated = False
 
-        self.subtree_parents.append(self.__class__(self.children,
-                self.connector, self.negated))
+        self.subtree_parents.append(self.__class__(self.children,self.connector, self.negated))
         self.connector = self.default
         self.negated = False
         self.children = []

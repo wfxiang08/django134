@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 """
 Create SQL statements for QuerySets.
 
@@ -6,6 +7,7 @@ themselves do not have to (and could be backed by things other than SQL
 databases). The abstraction barrier only works one way: this module has to know
 all about the internals of models in order to get the information it needs.
 """
+import os
 
 from django.utils.copycompat import deepcopy
 from django.utils.tree import Node
@@ -24,6 +26,21 @@ from django.db.models.sql.where import (WhereNode, Constraint, EverythingNode,
 from django.core.exceptions import FieldError
 
 __all__ = ['Query', 'RawQuery']
+
+from distutils.sysconfig import get_python_lib
+BASE_DIR = os.path.abspath(get_python_lib()) + "/"
+CUR_DIR = (os.path.abspath(os.path.curdir)) + "/"
+
+def get_stack_info():
+    import inspect
+    stacks = inspect.stack()
+    results = []
+    for stack in stacks[3:-5]:
+        filename = stack[1].replace(BASE_DIR, "").replace("South-1.0.1-py2.7.egg/", "").replace(CUR_DIR, "")
+        func_name = "%s %s %s %s" % (filename, stack[2], stack[3], stack[4])
+        results.append(func_name)
+    return "\n".join(results)
+
 
 class RawQuery(object):
     """
@@ -632,12 +649,18 @@ class Query(object):
         If 'create' is true, a new alias is always created. Otherwise, the
         most recently created alias for the table (if one exists) is reused.
         """
+
+        # 获取table_name的alias
         current = self.table_map.get(table_name)
         if not create and current:
             alias = current[0]
             self.alias_refcount[alias] += 1
             return alias, False
 
+        #
+        # 如果已经有alias, 并且create
+        # 否则默认的alais就是table name
+        #
         # Create a new alias for this table.
         if current:
             alias = '%s%d' % (self.alias_prefix, len(self.alias_map) + 1)
@@ -646,6 +669,8 @@ class Query(object):
             # The first occurence of a table uses the table name directly.
             alias = table_name
             self.table_map[alias] = [alias]
+
+        # alias的引用加1
         self.alias_refcount[alias] = 1
         self.tables.append(alias)
         return alias, True
@@ -849,6 +874,8 @@ class Query(object):
         If 'nullable' is True, the join can potentially involve NULL values and
         is a candidate for promotion (to "left outer") when combining querysets.
         """
+        # print get_stack_info()
+
         lhs, table, lhs_col, col = connection
         if lhs in self.alias_map:
             lhs_table = self.alias_map[lhs][TABLE_NAME]
@@ -885,6 +912,7 @@ class Query(object):
             join_type = self.LOUTER
         else:
             join_type = self.INNER
+
         join = (table, alias, join_type, lhs, lhs_col, col, nullable)
         self.alias_map[alias] = join
         if t_ident in self.join_map:
@@ -995,8 +1023,7 @@ class Query(object):
         # Add the aggregate to the query
         aggregate.add_to_query(self, alias, col=col, source=source, is_summary=is_summary)
 
-    def add_filter(self, filter_expr, connector=AND, negate=False, trim=False,
-            can_reuse=None, process_extras=True, force_having=False):
+    def add_filter(self, filter_expr, connector=AND, negate=False, trim=False, can_reuse=None, process_extras=True, force_having=False):
         """
         Add a single filter to the query. The 'filter_expr' is a pair:
         (filter_string, value). E.g. ('name__contains', 'fred')
@@ -1021,12 +1048,16 @@ class Query(object):
         joining process will be processed. This parameter is set to False
         during the processing of extra filters to avoid infinite recursion.
         """
+        # 例如:  ("id", 1232)
+        #       ("id__eq", 1234)
+        #       (age__gt, 10)
         arg, value = filter_expr
         parts = arg.split(LOOKUP_SEP)
         if not parts:
             raise FieldError("Cannot parse keyword query %r" % arg)
 
         # Work out the lookup type and remove it from 'parts', if necessary.
+        # 查找类型
         if len(parts) == 1 or parts[-1] not in self.query_terms:
             lookup_type = 'exact'
         else:
@@ -1034,11 +1065,16 @@ class Query(object):
 
         # By default, this is a WHERE clause. If an aggregate is referenced
         # in the value, the filter will be promoted to a HAVING
+        # 为什么呢?
         having_clause = False
 
         # Interpret '__exact=None' as the sql 'is NULL'; otherwise, reject all
         # uses of None as a query value.
+        #
+        # UserTagInfo.objects.filter(user=None)
+        #
         if value is None:
+            # user=None 为 exact
             if lookup_type != 'exact':
                 raise ValueError("Cannot use None as a query value")
             lookup_type = 'isnull'
@@ -1050,6 +1086,7 @@ class Query(object):
             value = SQLEvaluator(value, self)
             having_clause = value.contains_aggregate
 
+        # 暂时跳过
         if parts[0] in self.aggregates:
             aggregate = self.aggregates[parts[0]]
             entry = self.where_class()
@@ -1063,6 +1100,7 @@ class Query(object):
         alias = self.get_initial_alias()
         allow_many = trim or not negate
 
+        print "==> Opts: ", str(opts), ", Alias: ", alias, allow_many
         try:
             field, target, opts, join_list, last, extra_filters = self.setup_joins(
                     parts, opts, alias, True, allow_many, can_reuse=can_reuse,
@@ -1072,11 +1110,16 @@ class Query(object):
                     can_reuse)
             return
 
+        print "---> ", field, target, opts, join_list, last, extra_filters
+
         table_promote = False
         join_promote = False
 
         if (lookup_type == 'isnull' and value is True and not negate and
                 len(join_list) > 1):
+            #
+            # 大坑，如何跳过呢?
+            #
             # If the comparison is against NULL, we may need to use some left
             # outer joins when creating the join chain. This is only done when
             # needed, as it's less efficient at the database level.
@@ -1166,32 +1209,50 @@ class Query(object):
 
         Can also be used to add anything that has an 'add_to_query()' method.
         """
+        #
+        # Q(*args, **kwargs)
+        #
+        # 将一个查询条件添加到Query中
+        #
         if used_aliases is None:
             used_aliases = self.used_aliases
+
+        # 自定义的添加到query的方法
         if hasattr(q_object, 'add_to_query'):
             # Complex custom objects are responsible for adding themselves.
             q_object.add_to_query(self, used_aliases)
         else:
+            # 如何Q呢?
             if self.where and q_object.connector != AND and len(q_object) > 1:
                 self.where.start_subtree(AND)
                 subtree = True
             else:
                 subtree = False
+
+            # 默认的conenctor为AND
             connector = AND
+
             if q_object.connector == OR and not force_having:
                 force_having = self.need_force_having(q_object)
+
+            # 假定 force_having 为False
             for child in q_object.children:
                 if connector == OR:
                     refcounts_before = self.alias_refcount.copy()
+
+
                 if force_having:
                     self.having.start_subtree(connector)
                 else:
                     self.where.start_subtree(connector)
+
+                # child要么是Node, 要么是list([(key, value)]
                 if isinstance(child, Node):
                     self.add_q(child, used_aliases, force_having=force_having)
                 else:
-                    self.add_filter(child, connector, q_object.negated,
-                            can_reuse=used_aliases, force_having=force_having)
+                    self.add_filter(child, connector, q_object.negated, can_reuse=used_aliases, force_having=force_having)
+
+
                 if force_having:
                     self.having.end_subtree()
                 else:
@@ -1204,6 +1265,7 @@ class Query(object):
                     # set just because they don't match anything).
                     self.promote_unused_aliases(refcounts_before, used_aliases)
                 connector = q_object.connector
+
             if q_object.negated:
                 self.where.negate()
             if subtree:
