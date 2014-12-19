@@ -130,6 +130,7 @@ class Query(object):
         self.related_select_cols = []
 
         self.hints = {}
+        self.partitions = {}
 
         # SQL aggregate-related attributes
         self.aggregates = SortedDict() # Maps alias -> SQL aggregate function
@@ -284,6 +285,7 @@ class Query(object):
         obj.extra_order_by = self.extra_order_by
 
         obj.hints = self.hints
+        obj.partitions = self.partitions
 
         obj.deferred_loading = deepcopy(self.deferred_loading, memo=memo)
         if self.filter_is_sticky and self.used_aliases:
@@ -1735,6 +1737,13 @@ class Query(object):
     def add_hint(self, model, hint):
         add_to_dict(self.hints, model, hint)
 
+    def add_partitions(self, model, partitions):
+        """
+        Add partition info used for model
+        partitions: a string list of used partitions for this model, format: 'p0' OR ['p0', 'p1', ...]
+        """
+        add_values_to_dict(self.partitions, model, partitions)
+
     def clear_deferred_loading(self):
         """
         Remove any fields from the deferred loading set.
@@ -1923,6 +1932,21 @@ def add_to_dict(data, key, value):
         data[key].add(value)
     else:
         data[key] = set([value])
+
+def add_values_to_dict(data, key, values):
+    """
+    A helper function to add "value or value list" to the set of values for "key", whether or
+    not "key" already exists.
+    """
+    if type(values) != list:
+        lst = [values]
+    else:
+        lst = values
+
+    if key in data:
+        data[key] |= lst
+    else:
+        data[key] = set(lst)
 
 def get_proxied_model(opts):
     int_opts = opts

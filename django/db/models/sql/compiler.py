@@ -457,8 +457,13 @@ class SQLCompiler(object):
                 part = '%s%s%s' % (connector, qn(name), alias_str)
 
             for model, hint in self.query.hints.items():
-                 if model._meta.db_table == name:
-                     part += ' USE INDEX (%s)' % ', '.join(hint)
+                if model._meta.db_table == name:
+                    part += ' USE INDEX (%s)' % ', '.join(hint)
+
+            for model, partitions in self.query.partitions.items():
+                if model._meta.db_table == name:
+                    part += ' PARTITION (%s)' % generate_partitions_str(partitions)
+
             result.append(part)
 
             first = False
@@ -991,3 +996,13 @@ def order_modified_iter(cursor, trim, sentinel):
     for rows in iter((lambda: cursor.fetchmany(GET_ITERATOR_CHUNK_SIZE)),
             sentinel):
         yield [r[:-trim] for r in rows]
+
+def generate_partitions_str(partitions_set):
+    """
+    Generate partitions string from partiton set, each partition name is seperated by ','
+    If partitions_set is empty, then return the default partition name 'p_latest'
+
+    ['p0', 'p1', 'p2',...] -> 'p0,p1,p2'
+    [] -> 'p_latest'
+    """
+    return ','.join(partitions_set) if partitions_set else 'p_latest'

@@ -729,6 +729,17 @@ class QuerySet(object):
             clone.query.add_hint(model, hint)
         return clone
 
+    def with_partitions(self, *args, **kwargs):
+        """
+        Selects which partitions of the table this QuerySet should execute it's query against.
+        """
+        clone = self._clone()
+        for partition in args:
+            clone.query.add_partitions(self.model, partition)
+        for model, partition in kwargs.items():
+            clone.query.add_partitions(model, partition)
+        return clone
+
     ###################################
     # PUBLIC INTROSPECTION ATTRIBUTES #
     ###################################
