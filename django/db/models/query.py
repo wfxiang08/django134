@@ -738,6 +738,11 @@ class QuerySet(object):
             clone.query.add_partitions(self.model, partition)
         for model, partition in kwargs.items():
             clone.query.add_partitions(model, partition)
+
+        # if no partitions is given, use default partition 'p_latest', which is the last partition
+        if not clone.query.partitions:
+            clone.query.add_partitions(self.model, 'p_latest')
+
         return clone
 
     ###################################

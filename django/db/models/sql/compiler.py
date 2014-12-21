@@ -456,13 +456,16 @@ class SQLCompiler(object):
                 #result.append('%s%s%s' % (connector, qn(name), alias_str))
                 part = '%s%s%s' % (connector, qn(name), alias_str)
 
-            for model, hint in self.query.hints.items():
-                if model._meta.db_table == name:
-                    part += ' USE INDEX (%s)' % ', '.join(hint)
 
-            for model, partitions in self.query.partitions.items():
-                if model._meta.db_table == name:
-                    part += ' PARTITION (%s)' % generate_partitions_str(partitions)
+            # with_hint & with_partitions are set to work for mysql db only
+            if self.connection.vendor == 'mysql':
+                for model, hint in self.query.hints.items():
+                    if model._meta.db_table == name:
+                        part += ' USE INDEX (%s)' % ', '.join(hint)
+
+                for model, partitions in self.query.partitions.items():
+                    if model._meta.db_table == name:
+                        part += ' PARTITION (%s)' % generate_partitions_str(partitions)
 
             result.append(part)
 
