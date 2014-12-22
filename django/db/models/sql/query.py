@@ -1107,7 +1107,7 @@ class Query(object):
         alias = self.get_initial_alias()
         allow_many = trim or not negate
 
-        print "==> Opts: ", str(opts), ", Alias: ", alias, allow_many
+        # print "==> Opts: ", str(opts), ", Alias: ", alias, allow_many
         try:
             field, target, opts, join_list, last, extra_filters = self.setup_joins(
                     parts, opts, alias, True, allow_many, can_reuse=can_reuse,
@@ -1117,7 +1117,7 @@ class Query(object):
                     can_reuse)
             return
 
-        print "---> ", field, target, opts, join_list, last, extra_filters
+        # print "---> ", field, target, opts, join_list, last, extra_filters
 
         table_promote = False
         join_promote = False
