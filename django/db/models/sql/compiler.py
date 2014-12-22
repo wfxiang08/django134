@@ -444,28 +444,47 @@ class SQLCompiler(object):
                 # alias_map if they aren't in a join. That's OK. We skip them.
                 continue
             alias_str = (alias != name and ' %s' % alias or '')
-            # 参考: https://code.djangoproject.com/attachment/ticket/11003/with-hints-13402.diff
-            if join_type and not first:
-                # result.append('%s %s%s ON (%s.%s = %s.%s)'
-                #         % (join_type, qn(name), alias_str, qn(lhs),
-                #            qn2(lhs_col), qn(alias), qn2(col)))
-                part ='%s %s%s ON (%s.%s = %s.%s)' % (join_type, qn(name), alias_str, qn(lhs),qn2(lhs_col), qn(alias), qn2(col))
-            else:
 
+            if join_type and not first:
+                part = ''
+                if self.connection.vendor == 'mysql' and (self.query.hints or self.query.partitions):
+                    # 参考: https://code.djangoproject.com/attachment/ticket/11003/with-hints-13402.diff
+                    hints_info = ''
+                    for model, hint in self.query.hints.items():
+                        if model._meta.db_table == name:
+                            hints_info =  ', '.join(hint)
+                    # if query.partitions contains parition info for this sub table, generate sql with partition info
+                    partitions_info = ''
+                    for model, partitions in self.query.partitions.items():
+                        if model._meta.db_table == name:
+                            partitions_info = generate_partitions_str(partitions)
+
+                    part = '%s (SELECT * FROM %s' % (join_type, qn(name))
+                    if partitions_info:
+                        part += ' PARTITION (%s)' % partitions_info
+                    if hints_info:
+                        part += ' USE INDEX (%s)' % hints_info
+                    part += ') %s ON (%s.%s = %s.%s)' % (alias_str if alias_str else qn(name), qn(lhs),qn2(lhs_col), qn(alias), qn2(col))
+
+                # part empty contains 3 situations:
+                # 1. Database is not mysql
+                # 2. hints & partitions both null
+                # 3. hints | partitions not both null, but not match table of this round
+                # For these 3 situations, we generate sql without hints & partitions info
+                if not part:
+                    part ='%s %s%s ON (%s.%s = %s.%s)' % (join_type, qn(name), alias_str, qn(lhs),qn2(lhs_col), qn(alias), qn2(col))
+            else:
                 connector = not first and ', ' or ''
-                #result.append('%s%s%s' % (connector, qn(name), alias_str))
                 part = '%s%s%s' % (connector, qn(name), alias_str)
 
-
-            # with_hint & with_partitions are set to work for mysql db only
-            if self.connection.vendor == 'mysql':
-                for model, hint in self.query.hints.items():
-                    if model._meta.db_table == name:
-                        part += ' USE INDEX (%s)' % ', '.join(hint)
-
-                for model, partitions in self.query.partitions.items():
-                    if model._meta.db_table == name:
-                        part += ' PARTITION (%s)' % generate_partitions_str(partitions)
+                if self.connection.vendor == 'mysql' and (self.query.hints or self.query.partitions):
+                    for model, partitions in self.query.partitions.items():
+                        if model._meta.db_table == name:
+                            part += (' PARTITION (%s)' % generate_partitions_str(partitions))
+                    # 参考: https://code.djangoproject.com/attachment/ticket/11003/with-hints-13402.diff
+                    for model, hint in self.query.hints.items():
+                        if model._meta.db_table == name:
+                            part += ' USE INDEX (%s)' % ', '.join(hint)
 
             result.append(part)
 

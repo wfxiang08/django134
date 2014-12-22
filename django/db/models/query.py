@@ -721,23 +721,32 @@ class QuerySet(object):
         return clone
 
     # https://code.djangoproject.com/attachment/ticket/11003/with-hints-13402.diff
-    def with_hints(self, *args, **kwargs):
+    def with_hints(self, *args):
         clone = self._clone()
-        for hint in args:
-            clone.query.add_hint(self.model, hint)
-        for model, hint in kwargs.items():
-            clone.query.add_hint(model, hint)
+        for elem in args:
+            if type(elem) == str:
+                hint = elem
+                clone.query.add_hint(self.model, hint)
+            elif type(elem) == tuple:
+                model = elem[0]
+                for hint in elem[1]:
+                    clone.query.add_hint(model, hint)
+
         return clone
 
-    def with_partitions(self, *args, **kwargs):
+    def with_partitions(self, *args):
         """
         Selects which partitions of the table this QuerySet should execute it's query against.
         """
         clone = self._clone()
-        for partition in args:
-            clone.query.add_partitions(self.model, partition)
-        for model, partition in kwargs.items():
-            clone.query.add_partitions(model, partition)
+        for elem in args:
+            if type(elem) == str:
+                partition = elem
+                clone.query.add_partitions(self.model, partition)
+            elif type(elem) == tuple:
+                model = elem[0]
+                for partition in elem[1]:
+                    clone.query.add_partitions(model, partition)
 
         # if no partitions is given, use default partition 'p_latest', which is the last partition
         if not clone.query.partitions:
