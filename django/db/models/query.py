@@ -736,6 +736,49 @@ class QuerySet(object):
         clone._db = alias
         return clone
 
+    # https://code.djangoproject.com/attachment/ticket/11003/with-hints-13402.diff
+    def with_hints(self, *args):
+        """
+        Assign hints info for tables.
+        args could contain string or tuple, like:
+            with_partitions('id', (Problem, ['id', 'created_time']))
+        id is index name for self.model, and 'id' 'created_time' are index names for model Problem
+        """
+        clone = self._clone()
+        for elem in args:
+            if type(elem) == str:
+                hint = elem
+                clone.query.add_hint(self.model, hint)
+            elif type(elem) == tuple:
+                model = elem[0]
+                for hint in elem[1]:
+                    clone.query.add_hint(model, hint)
+
+        return clone
+
+    def with_partitions(self, *args):
+        """
+        Assign partitions info for tables.
+        args could contain string or tuple, like:
+            with_partitions('p0', (Problem, ['p0', 'p1']))
+        p0 is partition name for self.model, and 'p0' 'p1' are partition names for model Problem
+        """
+        clone = self._clone()
+        for elem in args:
+            if type(elem) == str:
+                partition = elem
+                clone.query.add_partitions(self.model, partition)
+            elif type(elem) == tuple:
+                model = elem[0]
+                for partition in elem[1]:
+                    clone.query.add_partitions(model, partition)
+
+        # if no partitions is given, use default partition 'p_latest', which is the last partition
+        if not clone.query.partitions:
+            clone.query.add_partitions(self.model, 'p_latest')
+
+        return clone
+
     ###################################
     # PUBLIC INTROSPECTION ATTRIBUTES #
     ###################################

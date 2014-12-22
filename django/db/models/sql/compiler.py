@@ -1,4 +1,4 @@
-# -*- coding:utf-8 -*-
+# -*- encoding:utf-8 -*-
 from django.core.exceptions import FieldError
 from django.db import connections
 from django.db.backends.util import truncate_name
@@ -464,14 +464,54 @@ class SQLCompiler(object):
 
             alias_str = (alias != name and ' %s' % alias or '')
 
-
             if join_type and not first:
-                # 例如:
-                #   LEFT OUTER JOIN "auth_user" ON ("api_usertaginfo"."user_id" = "auth_user"."id")
-                result.append('%s %s%s ON (%s.%s = %s.%s)' % (join_type, qn(name), alias_str, qn(lhs), qn2(lhs_col), qn(alias), qn2(col)))
+                part = ''
+                if self.connection.vendor == 'mysql' and (self.query.hints or self.query.partitions):
+                    # 参考: https://code.djangoproject.com/attachment/ticket/11003/with-hints-13402.diff
+                    # generate hints info for related table
+                    hints_info = ''
+                    for model, hint in self.query.hints.items():
+                        if model._meta.db_table == name:
+                            hints_info =  ', '.join(hint)
+                    # generate partition info for related table
+                    partitions_info = ''
+                    for model, partitions in self.query.partitions.items():
+                        if model._meta.db_table == name:
+                            partitions_info = generate_partitions_str(partitions)
+
+                    part = '%s (SELECT * FROM %s' % (join_type, qn(name))
+                    # add partitions info for related table
+                    if partitions_info:
+                        part += ' PARTITION (%s)' % partitions_info
+                    # add hints info for related table
+                    if hints_info:
+                        part += ' USE INDEX (%s)' % hints_info
+                    part += ') %s ON (%s.%s = %s.%s)' % (alias_str if alias_str else qn(name), qn(lhs),qn2(lhs_col), qn(alias), qn2(col))
+
+                # part empty contains 3 situations:
+                # 1. Database is not mysql
+                # 2. hints & partitions both null
+                # 3. hints | partitions not both null, but not match table of this round
+                # For these 3 situations, we generate sql without hints & partitions info
+                if not part:
+                    part ='%s %s%s ON (%s.%s = %s.%s)' % (join_type, qn(name), alias_str, qn(lhs),qn2(lhs_col), qn(alias), qn2(col))
             else:
                 connector = not first and ', ' or ''
-                result.append('%s%s%s' % (connector, qn(name), alias_str))
+                part = '%s%s%s' % (connector, qn(name), alias_str)
+
+                if self.connection.vendor == 'mysql' and (self.query.hints or self.query.partitions):
+                    # add partitions info for main table
+                    for model, partitions in self.query.partitions.items():
+                        if model._meta.db_table == name:
+                            part += (' PARTITION (%s)' % generate_partitions_str(partitions))
+                    # 参考: https://code.djangoproject.com/attachment/ticket/11003/with-hints-13402.diff
+                    # add hints info for main table
+                    for model, hint in self.query.hints.items():
+                        if model._meta.db_table == name:
+                            part += ' USE INDEX (%s)' % ', '.join(hint)
+
+            result.append(part)
+
             first = False
 
         for t in self.query.extra_tables:
@@ -1038,3 +1078,13 @@ def order_modified_iter(cursor, trim, sentinel):
     for rows in iter((lambda: cursor.fetchmany(GET_ITERATOR_CHUNK_SIZE)),
             sentinel):
         yield [r[:-trim] for r in rows]
+
+def generate_partitions_str(partitions_set):
+    """
+    Generate partitions string from partiton set, each partition name is seperated by ','
+    If partitions_set is empty, then return the default partition name 'p_latest'
+
+    ['p0', 'p1', 'p2',...] -> 'p0,p1,p2'
+    [] -> 'p_latest'
+    """
+    return ','.join(partitions_set) if partitions_set else 'p_latest'

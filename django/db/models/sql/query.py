@@ -1,4 +1,4 @@
-# -*- coding:utf-8 -*-
+# -*- encoding:utf-8 -*-
 """
 Create SQL statements for QuerySets.
 
@@ -144,6 +144,9 @@ class Query(object):
         self.distinct = False
         self.select_related = False
         self.related_select_cols = []
+
+        self.hints = {}
+        self.partitions = {}
 
         # SQL aggregate-related attributes
         self.aggregates = SortedDict() # Maps alias -> SQL aggregate function
@@ -296,6 +299,10 @@ class Query(object):
             obj._extra_select_cache = self._extra_select_cache.copy()
         obj.extra_tables = self.extra_tables
         obj.extra_order_by = self.extra_order_by
+
+        obj.hints = self.hints
+        obj.partitions = self.partitions
+
         obj.deferred_loading = deepcopy(self.deferred_loading, memo=memo)
         if self.filter_is_sticky and self.used_aliases:
             obj.used_aliases = self.used_aliases.copy()
@@ -1787,6 +1794,17 @@ class Query(object):
         if order_by:
             self.extra_order_by = order_by
 
+    # 参考: https://code.djangoproject.com/attachment/ticket/11003/with-hints-13402.diff
+    def add_hint(self, model, hint):
+        add_to_dict(self.hints, model, hint)
+
+    def add_partitions(self, model, partitions):
+        """
+        Add partition info used for model
+        partitions: a string list of used partitions for this model, format: 'p0' OR ['p0', 'p1', ...]
+        """
+        add_values_to_dict(self.partitions, model, partitions)
+
     def clear_deferred_loading(self):
         """
         Remove any fields from the deferred loading set.
@@ -1975,6 +1993,21 @@ def add_to_dict(data, key, value):
         data[key].add(value)
     else:
         data[key] = set([value])
+
+def add_values_to_dict(data, key, values):
+    """
+    A helper function to add "value or value list" to the set of values for "key", whether or
+    not "key" already exists.
+    """
+    if type(values) != list:
+        lst = [values]
+    else:
+        lst = values
+
+    if key in data:
+        data[key] |= lst
+    else:
+        data[key] = set(lst)
 
 def get_proxied_model(opts):
     int_opts = opts

@@ -72,7 +72,7 @@ if u'SVN' in version:
 
 setup(
     name = "Django",
-    version = "1.3.4-dev",
+    version = "1.3.5-dev",
     url = 'http://www.djangoproject.com/',
     author = 'Django Software Foundation',
     author_email = 'foundation@djangoproject.com',
