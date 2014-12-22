@@ -449,19 +449,22 @@ class SQLCompiler(object):
                 part = ''
                 if self.connection.vendor == 'mysql' and (self.query.hints or self.query.partitions):
                     # 参考: https://code.djangoproject.com/attachment/ticket/11003/with-hints-13402.diff
+                    # generate hints info for related table
                     hints_info = ''
                     for model, hint in self.query.hints.items():
                         if model._meta.db_table == name:
                             hints_info =  ', '.join(hint)
-                    # if query.partitions contains parition info for this sub table, generate sql with partition info
+                    # generate partition info for related table
                     partitions_info = ''
                     for model, partitions in self.query.partitions.items():
                         if model._meta.db_table == name:
                             partitions_info = generate_partitions_str(partitions)
 
                     part = '%s (SELECT * FROM %s' % (join_type, qn(name))
+                    # add partitions info for related table
                     if partitions_info:
                         part += ' PARTITION (%s)' % partitions_info
+                    # add hints info for related table
                     if hints_info:
                         part += ' USE INDEX (%s)' % hints_info
                     part += ') %s ON (%s.%s = %s.%s)' % (alias_str if alias_str else qn(name), qn(lhs),qn2(lhs_col), qn(alias), qn2(col))
@@ -478,10 +481,12 @@ class SQLCompiler(object):
                 part = '%s%s%s' % (connector, qn(name), alias_str)
 
                 if self.connection.vendor == 'mysql' and (self.query.hints or self.query.partitions):
+                    # add partitions info for main table
                     for model, partitions in self.query.partitions.items():
                         if model._meta.db_table == name:
                             part += (' PARTITION (%s)' % generate_partitions_str(partitions))
                     # 参考: https://code.djangoproject.com/attachment/ticket/11003/with-hints-13402.diff
+                    # add hints info for main table
                     for model, hint in self.query.hints.items():
                         if model._meta.db_table == name:
                             part += ' USE INDEX (%s)' % ', '.join(hint)

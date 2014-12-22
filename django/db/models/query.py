@@ -722,6 +722,12 @@ class QuerySet(object):
 
     # https://code.djangoproject.com/attachment/ticket/11003/with-hints-13402.diff
     def with_hints(self, *args):
+        """
+        Assign hints info for tables.
+        args could contain string or tuple, like:
+            with_partitions('id', (Problem, ['id', 'created_time']))
+        id is index name for self.model, and 'id' 'created_time' are index names for model Problem
+        """
         clone = self._clone()
         for elem in args:
             if type(elem) == str:
@@ -736,7 +742,10 @@ class QuerySet(object):
 
     def with_partitions(self, *args):
         """
-        Selects which partitions of the table this QuerySet should execute it's query against.
+        Assign partitions info for tables.
+        args could contain string or tuple, like:
+            with_partitions('p0', (Problem, ['p0', 'p1']))
+        p0 is partition name for self.model, and 'p0' 'p1' are partition names for model Problem
         """
         clone = self._clone()
         for elem in args:
