@@ -145,7 +145,7 @@ class Query(object):
         self.select_related = False
         self.related_select_cols = []
 
-        self.hints = {}
+        # self.hints = {}
         self.partitions = {}
 
         # SQL aggregate-related attributes
@@ -300,7 +300,7 @@ class Query(object):
         obj.extra_tables = self.extra_tables
         obj.extra_order_by = self.extra_order_by
 
-        obj.hints = self.hints
+        # obj.hints = self.hints
         obj.partitions = self.partitions
 
         obj.deferred_loading = deepcopy(self.deferred_loading, memo=memo)
@@ -1795,15 +1795,13 @@ class Query(object):
             self.extra_order_by = order_by
 
     # 参考: https://code.djangoproject.com/attachment/ticket/11003/with-hints-13402.diff
-    def add_hint(self, model, hint):
-        add_to_dict(self.hints, model, hint)
 
-    def add_partitions(self, model, partitions):
+    def add_partitions(self, model, partition_or_partitions):
         """
         Add partition info used for model
         partitions: a string list of used partitions for this model, format: 'p0' OR ['p0', 'p1', ...]
         """
-        add_values_to_dict(self.partitions, model, partitions)
+        add_values_to_dict(self.partitions, model, partition_or_partitions)
 
     def clear_deferred_loading(self):
         """
@@ -1999,15 +1997,18 @@ def add_values_to_dict(data, key, values):
     A helper function to add "value or value list" to the set of values for "key", whether or
     not "key" already exists.
     """
-    if type(values) != list:
+    # 将values统一转换成为list
+    if not isinstance(values, (list, tuple)):
         lst = [values]
     else:
         lst = values
+    lst = set(lst)
 
+    # 统一数据类型
     if key in data:
         data[key] |= lst
     else:
-        data[key] = set(lst)
+        data[key] = lst
 
 def get_proxied_model(opts):
     int_opts = opts

@@ -464,51 +464,39 @@ class SQLCompiler(object):
 
             alias_str = (alias != name and ' %s' % alias or '')
 
+            #
+            # 参考: https://code.djangoproject.com/attachment/ticket/11003/with-hints-13402.diff
+            #
             if join_type and not first:
-                part = ''
-                if self.connection.vendor == 'mysql' and (self.query.hints or self.query.partitions):
-                    # 参考: https://code.djangoproject.com/attachment/ticket/11003/with-hints-13402.diff
-                    # generate hints info for related table
-                    hints_info = ''
-                    for model, hint in self.query.hints.items():
-                        if model._meta.db_table == name:
-                            hints_info =  ', '.join(hint)
-                    # generate partition info for related table
-                    partitions_info = ''
+                partitions_info = None
+                if self.connection.vendor == 'mysql' and self.query.partitions:
                     for model, partitions in self.query.partitions.items():
                         if model._meta.db_table == name:
                             partitions_info = generate_partitions_str(partitions)
+                            break
 
-                    part = '%s (SELECT * FROM %s' % (join_type, qn(name))
-                    # add partitions info for related table
-                    if partitions_info:
-                        part += ' PARTITION (%s)' % partitions_info
-                    # add hints info for related table
-                    if hints_info:
-                        part += ' USE INDEX (%s)' % hints_info
-                    part += ') %s ON (%s.%s = %s.%s)' % (alias_str if alias_str else qn(name), qn(lhs),qn2(lhs_col), qn(alias), qn2(col))
+                # 获取指定的分区
+                if partitions_info:
+                    part = '%s %s PARTITION (%s) %s ON (%s.%s = %s.%s)' % (join_type, qn(name), partitions_info, alias_str, qn(lhs),qn2(lhs_col), qn(alias), qn2(col))
+                else:
+                    part = '%s %s %s ON (%s.%s = %s.%s)' % (join_type, qn(name), alias_str, qn(lhs),qn2(lhs_col), qn(alias), qn2(col))
 
-                # part empty contains 3 situations:
-                # 1. Database is not mysql
-                # 2. hints & partitions both null
-                # 3. hints | partitions not both null, but not match table of this round
-                # For these 3 situations, we generate sql without hints & partitions info
-                if not part:
-                    part ='%s %s%s ON (%s.%s = %s.%s)' % (join_type, qn(name), alias_str, qn(lhs),qn2(lhs_col), qn(alias), qn2(col))
             else:
-                connector = not first and ', ' or ''
-                part = '%s%s%s' % (connector, qn(name), alias_str)
 
-                if self.connection.vendor == 'mysql' and (self.query.hints or self.query.partitions):
-                    # add partitions info for main table
+                # 要么是第一个 table, 要么没有 join_type
+                partitions_info = None
+                if self.connection.vendor == 'mysql' and self.query.partitions:
                     for model, partitions in self.query.partitions.items():
                         if model._meta.db_table == name:
-                            part += (' PARTITION (%s)' % generate_partitions_str(partitions))
-                    # 参考: https://code.djangoproject.com/attachment/ticket/11003/with-hints-13402.diff
-                    # add hints info for main table
-                    for model, hint in self.query.hints.items():
-                        if model._meta.db_table == name:
-                            part += ' USE INDEX (%s)' % ', '.join(hint)
+                            partitions_info = generate_partitions_str(partitions)
+                            break
+
+                connector = not first and ', ' or ''
+                if partitions_info:
+                    part = '%s%s PARTITION (%s)%s' % (connector, qn(name), partitions_info, alias_str)
+                else:
+                    part = '%s%s%s' % (connector, qn(name), alias_str)
+
 
             result.append(part)
 
@@ -1087,4 +1075,7 @@ def generate_partitions_str(partitions_set):
     ['p0', 'p1', 'p2',...] -> 'p0,p1,p2'
     [] -> 'p_latest'
     """
-    return ','.join(partitions_set) if partitions_set else 'p_latest'
+    if partitions_set:
+        return ','.join(partitions_set)
+    else:
+        return None
