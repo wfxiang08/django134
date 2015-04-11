@@ -112,7 +112,12 @@ def build_suite(app_module):
                 # item 为test_suite, 对应一个TestCase
                 if isinstance(item, unittest.TestSuite):
                     # "api" + "." + "TestWeibo"
-                    add_full_test_name_2_testsuit(item, test_module.__package__ + "." + item[0].__name__)
+                    test_case_class = ""
+                    for test_suite in item:
+                        test_case_class = test_suite.__class__.__name__
+                        break
+
+                    add_full_test_name_2_testsuit(item, test_module.__package__ + "." + test_case_class)
             suite.addTest(test_suite)
             try:
                 suite.addTest(doctest.DocTestSuite(test_module,
