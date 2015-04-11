@@ -113,8 +113,8 @@ def build_suite(app_module):
                 if isinstance(item, unittest.TestSuite):
                     # "api" + "." + "TestWeibo"
                     test_case_class = ""
-                    for test_suite in item:
-                        test_case_class = test_suite.__class__.__name__
+                    for subsuite in item:
+                        test_case_class = subsuite.__class__.__name__
                         break
 
                     add_full_test_name_2_testsuit(item, test_module.__package__ + "." + test_case_class)
@@ -301,12 +301,10 @@ def add_full_test_name_2_test(test, label):
     if isinstance(test, unittest.TestCase):
         test.test_name = label
 def add_full_test_name_2_testsuit(suit, label):
-    for item in suit:
-        if isinstance(item, unittest.TestCase):
-            item.test_name = label + "." + item._testMethodName
-
-
-
+    if isinstance(suit, unittest.TestSuite):
+        for item in suit:
+            if isinstance(item, unittest.TestCase):
+                item.test_name = label + "." + item._testMethodName
 
 
 class DjangoTestSuiteRunner(object):
