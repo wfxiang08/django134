@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 from django.core.management.base import BaseCommand
 from optparse import make_option
 import sys
@@ -16,11 +17,14 @@ class Command(BaseCommand):
 
     def handle(self, *test_labels, **options):
         from django.conf import settings
+
         from django.test.utils import get_runner
 
         verbosity = int(options.get('verbosity', 1))
         interactive = options.get('interactive', True)
         failfast = options.get('failfast', False)
+
+        # 获取TestRunner
         TestRunner = get_runner(settings)
 
         if hasattr(TestRunner, 'func_name'):
@@ -33,6 +37,8 @@ class Command(BaseCommand):
             )
             failures = TestRunner(test_labels, verbosity=verbosity, interactive=interactive)
         else:
+            # 现在的模式:
+            # django.test.simple.DjangoTestSuiteRunner
             test_runner = TestRunner(verbosity=verbosity, interactive=interactive, failfast=failfast)
             failures = test_runner.run_tests(test_labels)
 
