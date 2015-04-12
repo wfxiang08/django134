@@ -492,6 +492,8 @@ class CYTextTestResult(unittest.TextTestResult):
     def __init__(self, stream, descriptions, verbosity):
         super(CYTextTestResult, self).__init__(stream, descriptions, verbosity)
         self.test_case_start_time = 0
+        self.test_start_time = 0
+        self.slows = []
 
     def startTest(self, test):
         super(CYTextTestResult, self).startTest(test)
@@ -501,12 +503,33 @@ class CYTextTestResult(unittest.TextTestResult):
         if self.testsRun == 1:
             test_case_start_time = time.time()
 
+        self.test_start_time = time.time()
+
         print (Fore.GREEN + "[%04d/%04d %4.1f%% T: %6.2fs]" % (self.testsRun, self.test_case_total_count, self.testsRun * 100 / max(1, self.test_case_total_count), time.time() - test_case_start_time) + Fore.RESET + " : " + Fore.RED + str(test) + Fore.RESET)
+
+
+    def stopTest(self, test):
+        super(CYTextTestResult, self).stopTest(test)
+        elasped = time.time() - self.test_start_time
+        if elasped > 0.2:
+            self.slows.append((elasped, str(test)))
 
     def printErrorList(self, flavour, errors):
         """
             最后汇总，输出测试的结果:
         """
+        if self.slows:
+            self.slows.sort(reverse=True)
+            self.stream.writeln(Fore.MAGENTA + "------------------------------------------------------------------" + Fore.RESET)
+            index = 0
+            for elapsed, test in self.slows:
+                index += 1
+                self.stream.writeln("SLOW-[%02d]: T: %.3fs --> %s" % (index, elapsed, test))
+                if index % 10 == 0:
+                    self.stream.writeln(Fore.GREEN + "------------------------------------------------------------------" + Fore.RESET)
+            self.stream.writeln(Fore.MAGENTA + "------------------------------------------------------------------" + Fore.RESET)
+            self.slows = []
+
         for test, err in errors:
             self.stream.writeln(self.separator1)
             self.stream.writeln("%s: %s" % (flavour,self.getDescription(test)))
