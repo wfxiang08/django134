@@ -418,10 +418,7 @@ class DjangoTestSuiteRunner(object):
         total_count = traverse_test_suit(suite)
 
         # 直接注入
-        from unittest import case
-        case.test_case_current_index = 0
-        case.test_case_total_count = total_count
-
+        CYTextTestResult.test_case_total_count = total_count
         return unittest.TextTestRunner(verbosity=self.verbosity, failfast=self.failfast, resultclass=CYTextTestResult).run(suite)
 
     def teardown_databases(self, old_config, **kwargs):
@@ -488,8 +485,23 @@ def run_tests(test_labels, verbosity=1, interactive=True, failfast=False, extra_
     test_runner = DjangoTestSuiteRunner(verbosity=verbosity, interactive=interactive, failfast=failfast)
     return test_runner.run_tests(test_labels, extra_tests=extra_tests)
 
+import time
 
 class CYTextTestResult(unittest.TextTestResult):
+    test_case_total_count = 0
+    def __init__(self, stream, descriptions, verbosity):
+        super(CYTextTestResult, self).__init__(stream, descriptions, verbosity)
+        self.test_case_start_time = 0
+
+    def startTest(self, test):
+        super(CYTextTestResult, self).startTest(test)
+
+        global test_case_start_time
+
+        if self.testsRun == 1:
+            test_case_start_time = time.time()
+
+        print (Fore.GREEN + "[%04d/%04d %4.1f%% T: %6.2fs]" % (self.testsRun, self.test_case_total_count, self.testsRun * 100 / max(1, self.test_case_total_count), time.time() - test_case_start_time) + Fore.RESET + " : " + Fore.RED + str(test) + Fore.RESET)
 
     def printErrorList(self, flavour, errors):
         """
