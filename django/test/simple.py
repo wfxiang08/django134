@@ -116,8 +116,8 @@ def build_suite(app_module):
                     for subsuite in item:
                         test_case_class = subsuite.__class__.__name__
                         break
-
-                    add_full_test_name_2_testsuit(item, test_module.__package__ + "." + test_case_class)
+                    app_path = ".".join(app_module.__name__.split('.')[:-1])
+                    add_full_test_name_2_testsuit(item, app_path + "." + test_case_class)
             suite.addTest(test_suite)
             try:
                 suite.addTest(doctest.DocTestSuite(test_module,
