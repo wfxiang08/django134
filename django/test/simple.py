@@ -489,6 +489,8 @@ import time
 
 class CYTextTestResult(unittest.TextTestResult):
     test_case_total_count = 0
+    no_slow_test = False
+
     def __init__(self, stream, descriptions, verbosity):
         super(CYTextTestResult, self).__init__(stream, descriptions, verbosity)
         self.test_case_start_time = 0
@@ -518,7 +520,7 @@ class CYTextTestResult(unittest.TextTestResult):
         """
             最后汇总，输出测试的结果:
         """
-        if self.slows:
+        if not self.no_slow_test and self.slows:
             self.slows.sort(reverse=True)
             self.stream.writeln(Fore.MAGENTA + "------------------------------------------------------------------" + Fore.RESET)
             index = 0

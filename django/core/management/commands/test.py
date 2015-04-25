@@ -2,11 +2,18 @@
 from django.core.management.base import BaseCommand
 from optparse import make_option
 import sys
+from django.test.simple import CYTextTestResult
+
 
 class Command(BaseCommand):
     option_list = BaseCommand.option_list + (
         make_option('--noinput', action='store_false', dest='interactive', default=True,
             help='Tells Django to NOT prompt the user for input of any kind.'),
+
+        make_option('--noslow', action='store_true', dest='no_slow_test', default=False,
+            help='不输出Slow Test结果'),
+
+
         make_option('--failfast', action='store_true', dest='failfast', default=False,
             help='Tells Django to stop running the test suite after first failed test.')
     )
@@ -23,6 +30,10 @@ class Command(BaseCommand):
         verbosity = int(options.get('verbosity', 1))
         interactive = options.get('interactive', True)
         failfast = options.get('failfast', False)
+
+        no_slow_test = options.get("no_slow_test", False)
+
+        CYTextTestResult.no_slow_test = no_slow_test
 
         # 获取TestRunner
         TestRunner = get_runner(settings)

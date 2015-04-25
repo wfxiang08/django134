@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 import logging
 import sys
 from django.core import mail
