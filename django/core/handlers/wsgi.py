@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 from pprint import pformat
 import sys
 from threading import Lock
@@ -233,6 +234,9 @@ class WSGIRequest(http.HttpRequest):
     REQUEST = property(_get_request)
 
 class WSGIHandler(base.BaseHandler):
+    """
+
+    """
     initLock = Lock()
     request_class = WSGIRequest
 
@@ -241,6 +245,9 @@ class WSGIHandler(base.BaseHandler):
 
         # Set up middleware if needed. We couldn't do this earlier, because
         # settings weren't available.
+        #
+        # 0. 初始化各种middleware
+        #
         if self._request_middleware is None:
             self.initLock.acquire()
             try:
@@ -256,9 +263,11 @@ class WSGIHandler(base.BaseHandler):
                 self.initLock.release()
 
         set_script_prefix(base.get_script_name(environ))
+        # 开始请求
         signals.request_started.send(sender=self.__class__)
         try:
             try:
+                # 1. 构建 WSGIRequest 对象
                 request = self.request_class(environ)
             except UnicodeDecodeError:
                 logger.warning('Bad Request (UnicodeDecodeError)',
@@ -269,16 +278,20 @@ class WSGIHandler(base.BaseHandler):
                 )
                 response = http.HttpResponseBadRequest()
             else:
+                # 2. 正常情况下的Request的处理
                 response = self.get_response(request)
         finally:
             signals.request_finished.send(sender=self.__class__)
 
+        # 如何处理: status_code
         try:
             status_text = STATUS_CODE_TEXT[response.status_code]
         except KeyError:
             status_text = 'UNKNOWN STATUS CODE'
         status = '%s %s' % (response.status_code, status_text)
         response_headers = [(str(k), str(v)) for k, v in response.items()]
+
+        # cookies --> Set-Cookie Header
         for c in response.cookies.values():
             response_headers.append(('Set-Cookie', str(c.output(header=''))))
         start_response(status, response_headers)

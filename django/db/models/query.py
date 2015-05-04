@@ -3,15 +3,12 @@
 The main QuerySet implementation. This provides the public API for the ORM.
 """
 
-from itertools import izip
-
 from django.db import connections, router, transaction, IntegrityError
-from django.db.models.aggregates import Aggregate
-from django.db.models.fields import DateField
+
 from django.db.models.query_utils import (Q, select_related_descend,
     deferred_class_factory, InvalidQuery)
 from django.db.models.deletion import Collector
-from django.db.models import signals, sql
+from django.db.models import sql
 from django.utils.copycompat import deepcopy
 
 # Used to control how many objects are worked with at once in some cases (e.g.
@@ -24,6 +21,24 @@ REPR_OUTPUT_SIZE = 20
 
 # Pull into this namespace for backwards compatibility.
 EmptyResultSet = sql.EmptyResultSet
+
+def args_msg(*args, **kwargs):
+    from django.db import models
+    from django.contrib.auth.models import AnonymousUser
+
+    kwargs_copy = None
+    args1 = [(arg.id if isinstance(arg, (models.Model, AnonymousUser)) else arg) for arg in args]
+    for key, value in kwargs.items():
+        # 如果是Model,  则取ID, 如果是AnonymousUser，则直接返回
+        if isinstance(value, (models.Model, AnonymousUser)):
+            if not kwargs_copy:
+                kwargs_copy = kwargs.copy()
+            kwargs_copy[key] = value.id
+
+
+    args1 = tuple(args1)
+    return str(args1) + "|" + str(kwargs_copy or kwargs)
+
 
 class QuerySet(object):
     """
@@ -355,9 +370,17 @@ class QuerySet(object):
         num = len(clone)
         if num == 1:
             return clone._result_cache[0]
+
         if not num:
-            raise self.model.DoesNotExist("%s matching query does not exist."
-                    % self.model._meta.object_name)
+            try:
+                msg = args_msg(*args, **kwargs)
+            except:
+                msg = ""
+
+            # 在出现 DoesNotExist 异常时，把相关的信息也打印出来
+            raise self.model.DoesNotExist("%s matching query does not exist. %s"
+                    % (self.model._meta.object_name, msg))
+
         raise self.model.MultipleObjectsReturned("get() returned more than one %s -- it returned %s! Lookup parameters were %s"
                 % (self.model._meta.object_name, num, kwargs))
 

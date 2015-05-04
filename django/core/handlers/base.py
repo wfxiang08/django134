@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 import sys
 
 from django import http
@@ -85,11 +86,13 @@ class BaseHandler(object):
             try:
                 response = None
                 # Apply request middleware
+                # 1. 通过 _request_middleware 处理
                 for middleware_method in self._request_middleware:
                     response = middleware_method(request)
                     if response:
                         break
 
+                # 2. 预处理结束，然后寻找最终的callback
                 if response is None:
                     if hasattr(request, "urlconf"):
                         # Reset url resolver with a custom urlconf.
@@ -100,12 +103,14 @@ class BaseHandler(object):
                     callback, callback_args, callback_kwargs = resolver.resolve(
                             request.path_info)
 
+                    # 2.1 这是什么东西呢?
                     # Apply view middleware
                     for middleware_method in self._view_middleware:
                         response = middleware_method(request, callback, callback_args, callback_kwargs)
                         if response:
                             break
 
+                # 3. 调用callback
                 if response is None:
                     try:
                         response = callback(request, *callback_args, **callback_kwargs)
@@ -171,7 +176,11 @@ class BaseHandler(object):
             # Reset URLconf for this thread on the way out for complete
             # isolation of request.urlconf
             urlresolvers.set_urlconf(None)
-
+        #
+        # http://stackoverflow.com/questions/11783404/wsgirequest-object-has-no-attribute-session
+        # 最后在response上应用: _response_middleware
+        #                     _request_middleware 在执行的时候不一定就是一对一的，可能部分的 _request_middleware没有被执行，而相应的 _response_middleware 却要执行
+        #
         try:
             # Apply response middleware, regardless of the response
             for middleware_method in self._response_middleware:
