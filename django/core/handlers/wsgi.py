@@ -215,6 +215,11 @@ class WSGIRequest(http.HttpRequest):
         self._post = post
 
     def _get_cookies(self):
+        #
+        # 如何解析Cookie呢?
+        # python中Cookie使用最后一个sid
+        # 如何获取原始的Cookie呢?
+        #  self.environ.get('HTTP_COOKIE', '')
         if not hasattr(self, '_cookies'):
             self._cookies = http.parse_cookie(self.environ.get('HTTP_COOKIE', ''))
         return self._cookies
@@ -296,4 +301,5 @@ class WSGIHandler(base.BaseHandler):
             response_headers.append(('Set-Cookie', str(c.output(header=''))))
         start_response(status, response_headers)
         return response
+
 

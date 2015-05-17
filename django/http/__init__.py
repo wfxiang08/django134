@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 import datetime
 import os
 import re
@@ -468,6 +469,8 @@ class QueryDict(MultiValueDict):
 def parse_cookie(cookie):
     if cookie == '':
         return {}
+
+    # 如何解析Cookie?
     if not isinstance(cookie, Cookie.BaseCookie):
         try:
             c = SimpleCookie()
@@ -477,6 +480,8 @@ def parse_cookie(cookie):
             return {}
     else:
         c = cookie
+
+    # SimpleCookie --> Cookie Dict
     cookiedict = {}
     for key in c.keys():
         cookiedict[key] = c.get(key).value

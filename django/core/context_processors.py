@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 """
 A set of request processors that return dictionaries to be merged into a
 template context. Each function takes the request object as its only parameter
@@ -35,6 +36,7 @@ def csrf(request):
     it has not been provided by either a view decorator or the middleware
     """
     def _get_val():
+        # 从request中读取Cookie: CSRF_COOKIE, 然后在模板文件中可以引用: {% csrf_token %}
         token = get_token(request)
         if token is None:
             # In order to be able to provide debugging info in the

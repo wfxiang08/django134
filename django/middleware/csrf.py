@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 """
 Cross Site Request Forgery Middleware.
 
@@ -109,6 +110,7 @@ class CsrfViewMiddleware(object):
         # If the user doesn't have a CSRF cookie, generate one and store it in the
         # request, so it's available to the view.  We'll store it in a cookie when
         # we reach the response.
+        # 1. 首先从Cookies中读取: CSRF_COOKIE, 如果没有则生成一个, 注意: cookie_is_new
         try:
             # In case of cookies from untrusted sources, we strip anything
             # dangerous at this point, so that the cookie + token will have the
@@ -125,9 +127,13 @@ class CsrfViewMiddleware(object):
 
         # Wait until request.META["CSRF_COOKIE"] has been manipulated before
         # bailing out, so that get_token still works
+        #
+        # 如果豁免了，则直接跳过
+        #
         if getattr(callback, 'csrf_exempt', False):
             return None
 
+        # 否则，对于所有的POST请求
         if request.method == 'POST':
             if getattr(request, '_dont_enforce_csrf_checks', False):
                 # Mechanism to turn off CSRF checks for test suite.  It comes after
@@ -178,6 +184,7 @@ class CsrfViewMiddleware(object):
             # the Django 1.1 method (hash of session ID), so a request is not
             # rejected if the form was sent to the user before upgrading to the
             # Django 1.2 method (session independent nonce)
+            # 获取 csrf_token, 如果cookie中没有，就尝试旧版的csrf_token
             if cookie_is_new:
                 try:
                     session_id = request.COOKIES[settings.SESSION_COOKIE_NAME]
@@ -197,6 +204,10 @@ class CsrfViewMiddleware(object):
                 csrf_token = request.META["CSRF_COOKIE"]
 
             # check incoming token
+            # 如何工作的?
+            # POST中的数据和COOKIE中的数据一致?
+            # csrfmiddlewaretoken <---> cookie 一致就OK
+            #
             request_csrf_token = request.POST.get('csrfmiddlewaretoken', '')
             if request_csrf_token == "":
                 # Fall back to X-CSRFToken, to make things easier for AJAX
