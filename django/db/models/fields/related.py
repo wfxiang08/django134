@@ -90,6 +90,10 @@ signals.class_prepared.connect(do_pending_lookups)
 class RelatedField(object):
     def contribute_to_class(self, cls, name):
         sup = super(RelatedField, self)
+        # 参考: Model类的构造
+        # for obj_name, obj in attrs.items():
+        #     new_class.add_to_class(obj_name, obj)
+
 
         # Store the opts for related_query_name()
         self.opts = cls._meta
@@ -125,20 +129,30 @@ class RelatedField(object):
             self.contribute_to_related_class(other, self.related)
 
     def get_prep_lookup(self, lookup_type, value):
+        print "KV: ", lookup_type, value
+
         if hasattr(value, 'prepare'):
             return value.prepare()
         if hasattr(value, '_prepare'):
             return value._prepare()
+
+        # print "LookupType: ", lookup_type, value, value.__class__
+
         # FIXME: lt and gt are explicitly allowed to make
         # get_(next/prev)_by_date work; other lookups are not allowed since that
         # gets messy pretty quick. This is a good candidate for some refactoring
         # in the future.
+
+        # lookup_type == exact, 精确查找
         if lookup_type in ['exact', 'gt', 'lt', 'gte', 'lte']:
             return self._pk_trace(value, 'get_prep_lookup', lookup_type)
-        if lookup_type in ('range', 'in'):
+
+        elif lookup_type in ('range', 'in'):
             return [self._pk_trace(v, 'get_prep_lookup', lookup_type) for v in value]
+
         elif lookup_type == 'isnull':
             return []
+
         raise TypeError("Related Field has invalid lookup: %s" % lookup_type)
 
     def get_db_prep_lookup(self, lookup_type, value, connection, prepared=False):
@@ -180,6 +194,18 @@ class RelatedField(object):
         # down until we hit a value that can be used for a comparison.
         v = value
 
+        print "KV1: ", self, prep_func, lookup_type, v, kwargs, self.rel.__class__, self.rel.to
+
+        """
+            场景:
+            Doctor.user
+
+            1. user: cy_cache.django_model.related_field.CachedForeignKey, 也就是当前的self
+            2. self.rel: django.db.models.fields.related.ManyToOneRel
+            3. self.rel.to: User
+        """
+
+
         # In the case of an FK to 'self', this check allows to_field to be used
         # for both forwards and reverse lookups across the FK. (For normal FKs,
         # it's only relevant for forward lookups).
@@ -187,10 +213,17 @@ class RelatedField(object):
             field_name = getattr(self.rel, "field_name", None)
         else:
             field_name = None
+
+        # 1. 如果理解value呢?
         try:
+            # 处理一种特殊情况，就是Primary Key可能是外键，然后就可能需要不停地读取外键的外键的。。。。的primary key
+            # 即：ForeignKey也为primary_key
             while True:
+                # 默认的field_name为 id
                 if field_name is None:
                     field_name = v._meta.pk.name
+
+                # 读取v的id
                 v = getattr(v, field_name)
                 field_name = None
         except AttributeError:
@@ -198,6 +231,8 @@ class RelatedField(object):
         except exceptions.ObjectDoesNotExist:
             v = None
 
+        # 步骤1, 2, 可能不同步，例如: 设置user = user.id, value部分会提前一步到达最终的key, 而Field部分会先从User, 然后在访问User的id: AutoField
+        # 2. 找到最终的Field
         field = self
         while field.rel:
             if hasattr(field.rel, 'field_name'):
@@ -207,6 +242,11 @@ class RelatedField(object):
 
         if lookup_type in ('range', 'in'):
             v = [v]
+
+        print "KV2: ", field, prep_func, lookup_type, v, kwargs
+
+        # 注意: prep_func不是作用在当前的Field上，因此不存在死循环
+        # 通过Field来理解V
         v = getattr(field, prep_func)(lookup_type, v, **kwargs)
         if isinstance(v, list):
             v = v[0]
@@ -309,6 +349,8 @@ class ReverseSingleRelatedObjectDescriptor(object):
             # If the related manager indicates that it should be used for
             # related fields, respect that.
             rel_mgr = self.field.rel.to._default_manager
+
+            # 根据: attname中的属性来获取外键数据
             db = router.db_for_read(self.field.rel.to, instance=instance)
             if getattr(rel_mgr, 'use_for_related_fields', False):
                 rel_obj = rel_mgr.using(db).get(**params)
@@ -327,6 +369,7 @@ class ReverseSingleRelatedObjectDescriptor(object):
             raise ValueError('Cannot assign None: "%s.%s" does not allow null values.' %
                                 (instance._meta.object_name, self.field.name))
         elif value is not None and not isinstance(value, self.field.rel.to):
+            # 验证Value是否有效
             raise ValueError('Cannot assign "%r": "%s.%s" must be a "%s" instance.' %
                                 (value, instance._meta.object_name,
                                  self.field.name, self.field.rel.to._meta.object_name))

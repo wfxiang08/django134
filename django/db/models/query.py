@@ -49,7 +49,7 @@ class QuerySet(object):
         # EmptyQuerySet instantiates QuerySet with model as None
         self._db = using
 
-        # query是什么东西呢?
+        # QuerySet通过sql.Query来首先查询条件的管理
         self.query = query or sql.Query(self.model)
 
         self._result_cache = None
@@ -104,10 +104,13 @@ class QuerySet(object):
         return len(self._result_cache)
 
     def __iter__(self):
+        # QuerySet如何理解呢?
         if self._result_cache is None:
+            # 构建迭代器
             self._iter = self.iterator()
             self._result_cache = []
 
+        # 有固定数据的QuerySet, 就不适用_iter, 直接使用_result_cache了
         if self._iter:
             return self._result_iter()
 
@@ -221,6 +224,9 @@ class QuerySet(object):
         return combined
 
     def __or__(self, other):
+        #
+        # query1 or query2是什么操作?, query_set1 | query_set2
+        #
         self._merge_sanity_check(other)
         combined = self._clone()
         if isinstance(other, EmptyQuerySet):
@@ -292,6 +298,9 @@ class QuerySet(object):
         model = self.model
 
         # 看看Query是如何作用的?
+        #
+        # Model query QuerySet 和sql query之间的关系
+        #
         compiler = self.query.get_compiler(using=db)
 
 
@@ -306,11 +315,14 @@ class QuerySet(object):
                 if skip:
                     row_data = row[index_start:aggregate_start]
                     pk_val = row_data[pk_idx]
+
+                    # 根据Model创建对象
                     obj = model_cls(**dict(zip(init_list, row_data)))
                 else:
                     # Omit aggregates in object creation.
                     obj = model(*row[index_start:aggregate_start])
 
+                # 相关的meta信息的设置: db, adding
                 # Store the source database of the object
                 obj._state.db = db
                 # This object came from the database; it's not being added.
@@ -365,6 +377,7 @@ class QuerySet(object):
         keyword arguments.
         """
         clone = self.filter(*args, **kwargs)
+
         if self.query.can_filter():
             clone = clone.order_by()
         num = len(clone)
@@ -378,8 +391,7 @@ class QuerySet(object):
                 msg = ""
 
             # 在出现 DoesNotExist 异常时，把相关的信息也打印出来
-            raise self.model.DoesNotExist("%s matching query does not exist. %s"
-                    % (self.model._meta.object_name, msg))
+            raise self.model.DoesNotExist("%s matching query does not exist. %s" % (self.model._meta.object_name, msg))
 
         raise self.model.MultipleObjectsReturned("get() returned more than one %s -- it returned %s! Lookup parameters were %s"
                 % (self.model._meta.object_name, num, kwargs))
@@ -390,6 +402,8 @@ class QuerySet(object):
         and returning the created object.
         """
         obj = self.model(**kwargs)
+
+        # 用于控制db的路由
         self._for_write = True
 
         obj.save(force_insert=True, using=self.db)
@@ -401,27 +415,43 @@ class QuerySet(object):
         Returns a tuple of (object, created), where created is a boolean
         specifying whether an object was created.
         """
-        assert kwargs, \
-                'get_or_create() must be passed at least one keyword argument'
+        assert kwargs, 'get_or_create() must be passed at least one keyword argument'
+
         defaults = kwargs.pop('defaults', {})
+
+        # 1. 处理kwargs
+        # 如果出现attname, 例如: doctor.user_id , 则自动处理为: doctor.user, 这个也是: get_or_create和get的区别
+        #
         lookup = kwargs.copy()
         for f in self.model._meta.fields:
             if f.attname in lookup:
                 lookup[f.name] = lookup.pop(f.attname)
+
+        # 2. _for_write = True 是什么意思?
         try:
             self._for_write = True
             return self.get(**lookup), False
         except self.model.DoesNotExist:
             try:
+                # 从kwarges中读取有效的params
                 params = dict([(k, v) for k, v in kwargs.items() if '__' not in k])
+
+                # 3. 注意: defaults中不能存在和kwargs中相同的key，否则：数据可能和预期的不一样
+                # 合并defaults
                 params.update(defaults)
+
                 obj = self.model(**params)
                 sid = transaction.savepoint(using=self.db)
                 obj.save(force_insert=True, using=self.db)
+
+                # 3. 好像对MySQL没有什么作用
+                # 数据库的配置最好设置为: READ-COMMITED, 否则可能存在问题
                 transaction.savepoint_commit(sid, using=self.db)
                 return obj, True
             except IntegrityError, e:
                 transaction.savepoint_rollback(sid, using=self.db)
+
+                # 保存失败, 再次读取
                 try:
                     return self.get(**lookup), False
                 except self.model.DoesNotExist:

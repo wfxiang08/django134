@@ -1,3 +1,4 @@
+# -*- encoding:utf-8 -*-
 from django.contrib.admin.filterspecs import FilterSpec
 from django.contrib.admin.options import IncorrectLookupParameters
 from django.contrib.admin.util import quote, get_fields_from_path
@@ -179,10 +180,14 @@ class ChangeList(object):
         use_distinct = False
 
         qs = self.root_query_set
+
+        # 处理URL中的查询条件
         lookup_params = self.params.copy() # a dictionary of the query string
         for i in (ALL_VAR, ORDER_VAR, ORDER_TYPE_VAR, SEARCH_VAR, IS_POPUP_VAR, TO_FIELD_VAR):
             if i in lookup_params:
                 del lookup_params[i]
+
+        # ?
         for key, value in lookup_params.items():
             if not isinstance(key, str):
                 # 'key' will be used as a keyword argument later, so Python
