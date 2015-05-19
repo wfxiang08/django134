@@ -130,6 +130,7 @@ class ModelBase(type):
 
         # Add all attributes to the class.
         # 完善Model Class
+        # 将ForeignKey等特殊处理
         for obj_name, obj in attrs.items():
             new_class.add_to_class(obj_name, obj)
 
@@ -364,6 +365,7 @@ class Model(object):
             # Slower, kwargs-ready version.
             for val, field in izip(args, fields_iter):
                 setattr(self, field.attname, val)
+
                 kwargs.pop(field.name, None)
                 # Maintain compatibility with existing calls.
                 if isinstance(field.rel, ManyToOneRel):
@@ -373,26 +375,39 @@ class Model(object):
 
         # Now we're left with the unprocessed fields that *must* come from
         # keywords, or default.
-
+        # fields_iter 为剩下没有处理完毕的字段
+        # 假定: args 为空?
+        #      例如:
+        #         user = User()
+        #         user_id = 1
+        #         user = 1
+        #
         for field in fields_iter:
             is_related_object = False
 
             # This slightly odd construct is so that we can access any
             # data-descriptor object (DeferredAttribute) without triggering its
             # __get__ method.
+            #
+            # attname, column(db_column), fieldname
+            #
+            # __class__中可能定义了 data-descriptor, 这样的attname直接跳过
             if (field.attname not in kwargs and
                     isinstance(self.__class__.__dict__.get(field.attname), DeferredAttribute)):
                 # This field will be populated on request.
                 continue
 
-
+            # 如果没有设置value的，则获取其默认数值
             if kwargs:
+                # 1. 如果对应的Field为外键，则如何处理呢?
                 if isinstance(field.rel, ManyToOneRel):
                     try:
                         # Assume object instance was passed in.
+                        # 2. 直接读取外键对象，例如: user = User()
                         rel_obj = kwargs.pop(field.name)
                         is_related_object = True
                     except KeyError:
+                        # 2. 如果不存在user, 则考虑: user_id
                         try:
                             # Object instance wasn't passed in -- must be an ID.
                             val = kwargs.pop(field.attname)
@@ -416,6 +431,9 @@ class Model(object):
                 # 如果没有参数，则直接选取默认值
                 val = field.get_default()
 
+            # user_id, user的问题，
+            # 3. SAVE的时候又是如何处理的呢?
+            # 看每一个Field的 pre_save 函数
             if is_related_object:
                 # If we are passed a related instance, set it using the
                 # field.name instead of field.attname (e.g. "user" instead of
@@ -601,10 +619,9 @@ class Model(object):
             manager = cls._base_manager
 
             if pk_set:
-                # 如果制定了PK
+                # 如果指定了PK
                 # Determine whether a record with the primary key already exists.
-                if (force_update or (not force_insert and
-                        manager.using(using).filter(pk=pk_val).exists())):
+                if (force_update or (not force_insert and manager.using(using).filter(pk=pk_val).exists())):
 
                     # It does already exist, so do an UPDATE.
                     if force_update or non_pks:

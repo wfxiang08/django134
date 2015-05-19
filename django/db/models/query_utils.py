@@ -72,6 +72,8 @@ class DeferredAttribute(object):
     object the first time, the query is executed.
     """
     def __init__(self, field_name, model):
+        # 需要的参数:
+        # model, field_name
         self.field_name = field_name
         self.model_ref = weakref.ref(model)
         self.loaded = False
@@ -84,9 +86,12 @@ class DeferredAttribute(object):
         from django.db.models.fields import FieldDoesNotExist
 
         assert instance is not None
-        cls = self.model_ref()
+        cls = self.model_ref() # ForeignKey等引用的Class, 例如: Doctor--> User
+
+        # 不能再次调用， 例如： doctor.user， 否则出现死循环
         data = instance.__dict__
         if data.get(self.field_name, self) is self:
+            # 如果data中field_name中的数据是: DeferredAttribute, 则需要继续读取
             # self.field_name is the attname of the field, but only() takes the
             # actual name, so we need to translate it here.
             try:
@@ -95,14 +100,11 @@ class DeferredAttribute(object):
             except FieldDoesNotExist:
                 name = [f.name for f in cls._meta.fields
                     if f.attname == self.field_name][0]
+
             # We use only() instead of values() here because we want the
             # various data coersion methods (to_python(), etc.) to be called
             # here.
-            val = getattr(
-                cls._base_manager.filter(pk=instance.pk).only(name).using(
-                    instance._state.db).get(),
-                self.field_name
-            )
+            val = getattr(cls._base_manager.filter(pk=instance.pk).only(name).using(instance._state.db).get(), self.field_name)
             data[self.field_name] = val
         return data[self.field_name]
 

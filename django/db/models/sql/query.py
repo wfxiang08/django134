@@ -227,6 +227,7 @@ class Query(object):
             connection = connections[using]
 
         # Check that the compiler will be able to execute the query
+        # 假定没有： aggregate的结果，那该如何理解?
         for alias, aggregate in self.aggregate_select.items():
             connection.ops.check_aggregate_support(aggregate)
 
@@ -1008,7 +1009,7 @@ class Query(object):
             # then we need to explore the joins that are required.
 
             field, source, opts, join_list, last, _ = self.setup_joins(
-                field_list, opts, self.get_initial_alias(), False)
+                field_list, opts, self.get_initial_alias(), False)  # allow_explicit_fk = False
 
             # Process the join chain to see if it can be trimmed
             col, _, join_list = self.trim_joins(source, join_list, last, False)
@@ -1080,6 +1081,9 @@ class Query(object):
         #
         # UserTagInfo.objects.filter(user=None)
         #
+        # print "VALUE: ", value, value.__class__
+        # 这里Value还可能是Model
+        #
         if value is None:
             # user=None 为 exact
             if lookup_type != 'exact':
@@ -1108,10 +1112,11 @@ class Query(object):
         allow_many = trim or not negate
 
         # print "==> Opts: ", str(opts), ", Alias: ", alias, allow_many
+
         try:
             field, target, opts, join_list, last, extra_filters = self.setup_joins(
                     parts, opts, alias, True, allow_many, can_reuse=can_reuse,
-                    negate=negate, process_extras=process_extras)
+                    negate=negate, process_extras=process_extras) # allow_explicit_fk 为False
         except MultiJoin, e:
             self.split_exclude(filter_expr, LOOKUP_SEP.join(parts[:e.level]),
                     can_reuse)
@@ -1169,14 +1174,18 @@ class Query(object):
             self.promote_alias_chain(join_it, join_promote)
             self.promote_alias_chain(table_it, table_promote or join_promote)
 
+        # 在这里value就已经完成了从 user = User() --> user = user_id的转变
+        print "VALUE: ", value, value.__class__
+        # 如何理解value？
+        # 例如:
+        #       user = user_id
+        #       user = User()
         if having_clause or force_having:
             if (alias, col) not in self.group_by:
                 self.group_by.append((alias, col))
-            self.having.add((Constraint(alias, col, field), lookup_type, value),
-                connector)
+            self.having.add((Constraint(alias, col, field), lookup_type, value), connector)
         else:
-            self.where.add((Constraint(alias, col, field), lookup_type, value),
-                connector)
+            self.where.add((Constraint(alias, col, field), lookup_type, value), connector)
 
         if negate:
             self.promote_alias_chain(join_list)
@@ -1243,6 +1252,7 @@ class Query(object):
                 force_having = self.need_force_having(q_object)
 
             # 假定 force_having 为False
+            # 处理处理各种Filter呢?
             for child in q_object.children:
                 if connector == OR:
                     refcounts_before = self.alias_refcount.copy()
@@ -1306,16 +1316,33 @@ class Query(object):
         exclusions = set()
         extra_filters = []
         int_alias = None
+
+        #
+        # 例如:
+        #   doctor.name
+        #   doctor.user__id
+        #   doctor.user__name
+        #   doctor.pk
+        #   doctor.user__pk
+        #
         for pos, name in enumerate(names):
             if int_alias is not None:
                 exclusions.add(int_alias)
             exclusions.add(alias)
             last.append(len(joins))
+
+            # 实现pk的翻译
             if name == 'pk':
                 name = opts.pk.name
+
+            # 从name获取Field
             try:
                 field, model, direct, m2m = opts.get_field_by_name(name)
             except FieldDoesNotExist:
+                # 如果Field获取失败? 做了哪些事情呢?
+                # Doctor.objects.filter(user_id = 1000), 似乎还是能工作的?
+                # TODO: 也许是不规范的做法
+                #
                 for f in opts.fields:
                     if allow_explicit_fk and name == f.attname:
                         # XXX: A hack to allow foo_id to work in values() for
@@ -1324,14 +1351,16 @@ class Query(object):
                         field, model, direct, m2m = opts.get_field_by_name(f.name)
                         break
                 else:
+                    # 没有找到合适的Field, 报错
                     names = opts.get_all_field_names() + self.aggregate_select.keys()
-                    raise FieldError("Cannot resolve keyword %r into field. "
-                            "Choices are: %s" % (name, ", ".join(names)))
+                    raise FieldError("Cannot resolve keyword %r into field. Choices are: %s" % (name, ", ".join(names)))
 
             if not allow_many and (m2m or not direct):
                 for alias in joins:
                     self.unref_alias(alias)
                 raise MultiJoin(pos + 1)
+
+
             if model:
                 # The field lives on a base class of the current model.
                 # Skip the chain of proxy to the concrete proxied model
@@ -1348,13 +1377,12 @@ class Query(object):
                                     (id(opts), lhs_col), ()))
                             dupe_set.add((opts, lhs_col))
                         opts = int_model._meta
-                        alias = self.join((alias, opts.db_table, lhs_col,
-                                opts.pk.column), exclusions=exclusions)
+
+                        alias = self.join((alias, opts.db_table, lhs_col, opts.pk.column), exclusions=exclusions)
                         joins.append(alias)
                         exclusions.add(alias)
                         for (dupe_opts, dupe_col) in dupe_set:
-                            self.update_dupe_avoidance(dupe_opts, dupe_col,
-                                    alias)
+                            self.update_dupe_avoidance(dupe_opts, dupe_col, alias)
             cached_data = opts._join_cache.get(name)
             orig_opts = opts
             dupe_col = direct and field.column or field.field.column
@@ -1637,19 +1665,26 @@ class Query(object):
 
     def add_fields(self, field_names, allow_m2m=True):
         """
-        Adds the given (model) fields to the select set. The field names are
-        added in the order specified.
+            Adds the given (model) fields to the select set. The field names are
+            added in the order specified.
         """
         alias = self.get_initial_alias()
         opts = self.get_meta()
 
         try:
             for name in field_names:
-                field, target, u2, joins, u3, u4 = self.setup_joins(
-                        name.split(LOOKUP_SEP), opts, alias, False, allow_m2m,
-                        True)
+                #
+                # 例如: Doctor
+                #      doctor.user
+                #      doctor.user_id 到底什么时候有区别，什么时候没有区别呢?
+                #
+
+                field, target, u2, joins, u3, u4 = self.setup_joins(name.split(LOOKUP_SEP), opts, alias, False, allow_m2m,
+                                                                    allow_explicit_fk=True)
                 final_alias = joins[-1]
                 col = target.column
+
+                # 如果没有jonin,
                 if len(joins) > 1:
                     join = self.alias_map[final_alias]
                     if col == join[RHS_JOIN_COL]:
@@ -1658,15 +1693,19 @@ class Query(object):
                         col = join[LHS_JOIN_COL]
                         joins = joins[:-1]
                 self.promote_alias_chain(joins[1:])
+
+                # select, select_fields
                 self.select.append((final_alias, col))
                 self.select_fields.append(field)
         except MultiJoin:
             raise FieldError("Invalid field name: '%s'" % name)
         except FieldError:
+            # 出现了异常的name
             names = opts.get_all_field_names() + self.extra.keys() + self.aggregate_select.keys()
             names.sort()
-            raise FieldError("Cannot resolve keyword %r into field. "
-                    "Choices are: %s" % (name, ", ".join(names)))
+            raise FieldError("Cannot resolve keyword %r into field. Choices are: %s" % (name, ", ".join(names)))
+
+
         self.remove_inherited_models()
 
     def add_ordering(self, *ordering):

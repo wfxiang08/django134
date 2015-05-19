@@ -1,3 +1,4 @@
+# -*- encoding:utf-8 -*-
 """
 Code to manage the creation and SQL rendering of 'where' constraints.
 """
@@ -43,9 +44,11 @@ class WhereNode(tree.Node):
         is stored unchanged and can be any class with an 'as_sql()' method.
         """
         if not isinstance(data, (list, tuple)):
+            # 如何理解: data呢?
             super(WhereNode, self).add(data, connector)
             return
 
+        # (Constraint(alias, col, field), lookup_type, value) 如何理解和处理呢?
         obj, lookup_type, value = data
         if hasattr(value, '__iter__') and hasattr(value, 'next'):
             # Consume any generators immediately, so that we can determine
@@ -56,6 +59,7 @@ class WhereNode(tree.Node):
         # about the value(s) to the query construction. Specifically, datetime
         # and empty values need special handling. Other types could be used
         # here in the future (using Python types is suggested for consistency).
+        # 日期的特殊处理?
         if isinstance(value, datetime.datetime):
             annotation = datetime.datetime
         elif hasattr(value, 'value_annotation'):
@@ -64,13 +68,13 @@ class WhereNode(tree.Node):
             annotation = bool(value)
 
         if hasattr(obj, "prepare"):
+            # print "VALUE1: ", value, value.__class__
             value = obj.prepare(lookup_type, value)
-            super(WhereNode, self).add((obj, lookup_type, annotation, value),
-                connector)
+            # print "VALUE2: ", value, value.__class__
+            super(WhereNode, self).add((obj, lookup_type, annotation, value), connector)
             return
 
-        super(WhereNode, self).add((obj, lookup_type, annotation, value),
-                connector)
+        super(WhereNode, self).add((obj, lookup_type, annotation, value),connector)
 
     def as_sql(self, qn, connection):
         """
@@ -93,6 +97,7 @@ class WhereNode(tree.Node):
                 else:
                     # A leaf node in the tree.
                     sql, params = self.make_atom(child, qn, connection)
+                    # print "SQL: ", sql, params, child
 
             except EmptyResultSet:
                 if self.connector == AND and not self.negated:
@@ -143,8 +148,8 @@ class WhereNode(tree.Node):
             except EmptyShortCircuit:
                 raise EmptyResultSet
         else:
-            params = Field().get_db_prep_lookup(lookup_type, params_or_value,
-                connection=connection, prepared=True)
+            params = Field().get_db_prep_lookup(lookup_type, params_or_value, connection=connection, prepared=True)
+
         if isinstance(lvalue, tuple):
             # A direct database column lookup.
             field_sql = self.sql_for_columns(lvalue, qn, connection)
@@ -312,7 +317,13 @@ class Constraint(object):
             self.field = None
 
     def prepare(self, lookup_type, value):
+        """
+            user = user
+            user = user.id 如何处理呢?
+        """
+        # 借助Field来处理
         if self.field:
+            # print "FIELD: ", self.field.__class__
             return self.field.get_prep_lookup(lookup_type, value)
         return value
 

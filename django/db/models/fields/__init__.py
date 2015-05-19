@@ -248,6 +248,10 @@ class Field(object):
     def get_attname_column(self):
         attname = self.get_attname()
         column = self.db_column or attname
+        # 注意两个名字:
+        # column表示数据库中的字段
+        # attname表示该字段对应的属性，例如: user_id
+        # doctor.user实际上是读取的一个DeferedAttribute?
         return attname, column
 
     def get_cache_name(self):
@@ -258,7 +262,7 @@ class Field(object):
 
     def pre_save(self, model_instance, add):
         """Returns field's value just before saving.
-            默认就是直接读取 attname对应的value
+            默认就是直接读取 attname对应的value, 但是对应外键，例如: user, 有时候attname对应的属性为空，参考: Model(）构造函数
         """
         return getattr(model_instance, self.attname)
 
@@ -288,6 +292,7 @@ class Field(object):
         if hasattr(value, '_prepare'):
             return value._prepare()
 
+        # 这说明: value本身就是字符串，不用特殊处理
         if lookup_type in (
                 'regex', 'iregex', 'month', 'day', 'week_day', 'search',
                 'contains', 'icontains', 'iexact', 'startswith', 'istartswith',
@@ -310,8 +315,10 @@ class Field(object):
         "Returns field's value prepared for database lookup."
         if not prepared:
             value = self.get_prep_lookup(lookup_type, value)
+
         if hasattr(value, 'get_compiler'):
             value = value.get_compiler(connection=connection)
+
         if hasattr(value, 'as_sql') or hasattr(value, '_as_sql'):
             # If the value has a relabel_aliases method, it will need to
             # be invoked before the final SQL is evaluated
@@ -524,6 +531,9 @@ class BooleanField(Field):
         # admin interface). Only works for scalar values (not lists). If you're
         # passing in a list, you might as well make things the right type when
         # constructing the list.
+        #
+        # 如何去理解 value呢?
+        #
         if value in ('1', '0'):
             value = bool(int(value))
         return super(BooleanField, self).get_prep_lookup(lookup_type, value)
@@ -640,6 +650,7 @@ class DateField(Field):
             前者只要有save, 就自动更新；后者在save时才更新
         """
         if self.auto_now or (self.auto_now_add and add):
+            # 设置默认的时间
             value = datetime.date.today()
             setattr(model_instance, self.attname, value)
             return value
