@@ -129,7 +129,7 @@ class RelatedField(object):
             self.contribute_to_related_class(other, self.related)
 
     def get_prep_lookup(self, lookup_type, value):
-        print "KV: ", lookup_type, value
+        # print "KV: ", lookup_type, value
 
         if hasattr(value, 'prepare'):
             return value.prepare()
@@ -194,7 +194,7 @@ class RelatedField(object):
         # down until we hit a value that can be used for a comparison.
         v = value
 
-        print "KV1: ", self, prep_func, lookup_type, v, kwargs, self.rel.__class__, self.rel.to
+        # print "KV1: ", self, prep_func, lookup_type, v, kwargs, self.rel.__class__, self.rel.to
 
         """
             场景:
@@ -243,7 +243,7 @@ class RelatedField(object):
         if lookup_type in ('range', 'in'):
             v = [v]
 
-        print "KV2: ", field, prep_func, lookup_type, v, kwargs
+        # print "KV2: ", field, prep_func, lookup_type, v, kwargs
 
         # 注意: prep_func不是作用在当前的Field上，因此不存在死循环
         # 通过Field来理解V

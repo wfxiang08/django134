@@ -97,7 +97,7 @@ class WhereNode(tree.Node):
                 else:
                     # A leaf node in the tree.
                     sql, params = self.make_atom(child, qn, connection)
-                    print "SQL: ", sql, params, child
+                    # print "SQL: ", sql, params, child
 
             except EmptyResultSet:
                 if self.connector == AND and not self.negated:
