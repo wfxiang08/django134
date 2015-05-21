@@ -245,8 +245,9 @@ class RelatedField(object):
 
         # print "KV2: ", field, prep_func, lookup_type, v, kwargs
 
-        # 注意: prep_func不是作用在当前的Field上，因此不存在死循环
-        # 通过Field来理解V
+        # 注意:
+        # 1. prep_func不是作用在当前的Field上，因此不存在死循环
+        # 2. 通过Field来理解V, 例如: id(AutoField) = "121212"，这是如何处理的呢？
         v = getattr(field, prep_func)(lookup_type, v, **kwargs)
         if isinstance(v, list):
             v = v[0]

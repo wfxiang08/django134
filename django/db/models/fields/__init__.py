@@ -489,6 +489,7 @@ class AutoField(Field):
     def get_prep_value(self, value):
         if value is None:
             return None
+        # 完整类型转换, 确保AutoField字段对应的数据为int
         return int(value)
 
     def contribute_to_class(self, cls, name):
