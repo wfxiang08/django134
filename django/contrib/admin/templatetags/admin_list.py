@@ -1,3 +1,4 @@
+# -*- encoding:utf-8 -*-
 import datetime
 
 from django.conf import settings
@@ -83,6 +84,7 @@ def result_headers(cl):
     """
     lookup_opts = cl.lookup_opts
 
+    # 如何处理所有的字段(Headers?)
     for i, field_name in enumerate(cl.list_display):
         header, attr = label_for_field(field_name, cl.model,
             model_admin = cl.model_admin,
@@ -131,6 +133,8 @@ def items_for_result(cl, result, form):
     """
     first = True
     pk = cl.lookup_opts.pk.attname
+
+    # 如何根据list_display处理单个的result呢?
     for field_name in cl.list_display:
         row_class = ''
         try:
@@ -138,6 +142,7 @@ def items_for_result(cl, result, form):
         except (AttributeError, ObjectDoesNotExist):
             result_repr = EMPTY_CHANGELIST_VALUE
         else:
+            # 如果没有找到field, 则可能是checkbox, 或者是自定义的函数(ModelAdmin中)
             if f is None:
                 if field_name == u'action_checkbox':
                     row_class = ' class="action-checkbox"'

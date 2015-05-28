@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 import re
 
 from django.conf import settings
@@ -38,8 +39,11 @@ class CommonMiddleware(object):
         settings.APPEND_SLASH and settings.PREPEND_WWW
         """
 
-        # Check for denied User-Agents
+        # 1. Check for denied User-Agents
         if 'HTTP_USER_AGENT' in request.META:
+            #
+            # disallowed user agents
+            #
             for user_agent_regex in settings.DISALLOWED_USER_AGENTS:
                 if user_agent_regex.search(request.META['HTTP_USER_AGENT']):
                     logger.warning('Forbidden (User agent): %s' % request.path,
@@ -56,17 +60,24 @@ class CommonMiddleware(object):
         old_url = [host, request.path]
         new_url = old_url[:]
 
-        if (settings.PREPEND_WWW and old_url[0] and
-                not old_url[0].startswith('www.')):
+        # 是否添加 www, 默认为: False
+        if (settings.PREPEND_WWW and old_url[0] and not old_url[0].startswith('www.')):
             new_url[0] = 'www.' + old_url[0]
 
         # Append a slash if APPEND_SLASH is set and the URL doesn't have a
         # trailing slash and there is no pattern for the current path
+        # 2. 添加SLASH, 但是对于带有POST的Request似乎有问题
         if settings.APPEND_SLASH and (not old_url[1].endswith('/')):
             urlconf = getattr(request, 'urlconf', None)
-            if (not _is_valid_path(request.path_info, urlconf) and
-                    _is_valid_path("%s/" % request.path_info, urlconf)):
+
+            # 什么意思?
+            # 如果给定的path_info无效, 但是添加 "/"之后path_info变得有效，则会出现问题
+            # 3. 好的实践方式: 所有的POST的URL最好同时支持"/", 和 非"/"结尾的情况, 这样就没有REDIRECT了
+            #
+            if (not _is_valid_path(request.path_info, urlconf) and _is_valid_path("%s/" % request.path_info, urlconf)):
                 new_url[1] = new_url[1] + '/'
+
+                # 如何处理呢?
                 if settings.DEBUG and request.method == 'POST':
                     raise RuntimeError, (""
                     "You called this URL via POST, but the URL doesn't end "
@@ -79,12 +90,14 @@ class CommonMiddleware(object):
         if new_url == old_url:
             # No redirects required.
             return
+
         if new_url[0]:
-            newurl = "%s://%s%s" % (
-                request.is_secure() and 'https' or 'http',
-                new_url[0], urlquote(new_url[1]))
+            newurl = "%s://%s%s" % (request.is_secure() and 'https' or 'http', new_url[0], urlquote(new_url[1]))
         else:
             newurl = urlquote(new_url[1])
+
+        # 如果是GET, 则OK
+        # 如果是POST, 则数据丢失了
         if request.GET:
             newurl += '?' + request.META['QUERY_STRING']
         return http.HttpResponsePermanentRedirect(newurl)
@@ -92,6 +105,8 @@ class CommonMiddleware(object):
     def process_response(self, request, response):
         "Send broken link emails and calculate the Etag, if needed."
         if response.status_code == 404:
+
+            # 跳过
             if settings.SEND_BROKEN_LINK_EMAILS and not settings.DEBUG:
                 # If the referrer was from an internal link or a non-search-engine site,
                 # send a note to the managers.
@@ -110,10 +125,13 @@ class CommonMiddleware(object):
 
         # Use ETags, if requested.
         if settings.USE_ETAGS:
+            # ETag: 服务器的数据由于没有缓存，因此服务器还会处理一遍request
             if response.has_header('ETag'):
                 etag = response['ETag']
             else:
                 etag = '"%s"' % md5_constructor(response.content).hexdigest()
+
+            # 如果ETag一致，且请求有效，则直接返回: 304
             if response.status_code >= 200 and response.status_code < 300 and request.META.get('HTTP_IF_NONE_MATCH') == etag:
                 cookies = response.cookies
                 response = http.HttpResponseNotModified()

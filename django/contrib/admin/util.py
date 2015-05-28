@@ -1,3 +1,4 @@
+# -*- encoding:utf-8 -*-
 from django.db import models
 from django.db.models.sql.constants import LOOKUP_SEP
 from django.db.models.deletion import Collector
@@ -199,20 +200,30 @@ def model_ngettext(obj, n=None):
 
 
 def lookup_field(name, obj, model_admin=None):
+    """
+    从obj, model_admin中读取给定的字段，函数等
+    :param name:
+    :param obj:
+    :param model_admin:
+    :return:
+    """
     opts = obj._meta
     try:
         f = opts.get_field(name)
     except models.FieldDoesNotExist:
         # For non-field values, the value is either a method, property or
         # returned via a callable.
+        # callable如何传递过来的呢? 是否是和model_admin进行过binding?
         if callable(name):
             attr = name
             value = attr(obj)
-        elif (model_admin is not None and hasattr(model_admin, name) and
-          not name == '__str__' and not name == '__unicode__'):
+
+        elif (model_admin is not None and hasattr(model_admin, name) and not name == '__str__' and not name == '__unicode__'):
+            # attr也是一个函数(但是不是: __str__, __unicode__
             attr = getattr(model_admin, name)
             value = attr(obj)
         else:
+            # 调用obj自己的函数
             attr = getattr(obj, name)
             if callable(attr):
                 value = attr()
@@ -220,6 +231,7 @@ def lookup_field(name, obj, model_admin=None):
                 value = attr
         f = None
     else:
+        # 如果有字段，则直接读取字段, 例如: Doctor.user(这里就可能会有外键的处理了)
         attr = None
         value = getattr(obj, name)
     return f, attr, value

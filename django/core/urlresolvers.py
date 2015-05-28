@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 """
 This module converts requested URLs to callback view functions.
 
@@ -104,6 +105,7 @@ def get_resolver(urlconf):
         from django.conf import settings
         urlconf = settings.ROOT_URLCONF
     return RegexURLResolver(r'^/', urlconf)
+
 get_resolver = memoize(get_resolver, _resolver_cache, 1)
 
 def get_mod_func(callback):
@@ -121,6 +123,9 @@ class RegexURLPattern(object):
         # callback is either a string like 'foo.views.news.stories.story_detail'
         # which represents the path to a module and a view function name, or a
         # callable object (view).
+
+        # 直接就编译了，原始的数据呢?
+        # self.regex.pattern 中带有原始的信息
         self.regex = re.compile(regex, re.UNICODE)
         if callable(callback):
             self._callback = callback
@@ -176,9 +181,12 @@ class RegexURLResolver(object):
         # regex is a string representing a regular expression.
         # urlconf_name is a string representing the module containing URLconfs.
         self.regex = re.compile(regex, re.UNICODE)
+
+
         self.urlconf_name = urlconf_name
         if not isinstance(urlconf_name, basestring):
             self._urlconf_module = self.urlconf_name
+
         self.callback = None
         self.default_kwargs = default_kwargs or {}
         self.namespace = namespace
@@ -244,9 +252,13 @@ class RegexURLResolver(object):
 
     def resolve(self, path):
         tried = []
+        # 给定一个path, 首先search(如果得到match, 则继续匹配剩下的， 否则raise Resolver404
         match = self.regex.search(path)
+
         if match:
             new_path = path[match.end():]
+
+            # 遍历所有的pattern
             for pattern in self.url_patterns:
                 try:
                     sub_match = pattern.resolve(new_path)
@@ -258,16 +270,27 @@ class RegexURLResolver(object):
                         tried.append([pattern])
                 else:
                     if sub_match:
+                        # 1. 如果存在match, 则得到 groupdict, 解析所有的参数的值
                         sub_match_dict = dict([(smart_str(k), v) for k, v in match.groupdict().items()])
+
+                        # 2. 获取默认的参数(奇怪?)
                         sub_match_dict.update(self.default_kwargs)
+
+                        # 3. 获取 sub_match的参数
                         for k, v in sub_match.kwargs.iteritems():
                             sub_match_dict[smart_str(k)] = v
+
                         return ResolverMatch(sub_match.func, sub_match.args, sub_match_dict, sub_match.url_name, self.app_name or sub_match.app_name, [self.namespace] + sub_match.namespaces)
+
                     tried.append([pattern])
             raise Resolver404({'tried': tried, 'path': new_path})
         raise Resolver404({'path' : path})
 
+
     def _get_urlconf_module(self):
+        """
+            如何获取urls模块, 该模块已经是解析好的Patterns
+        """
         try:
             return self._urlconf_module
         except AttributeError:

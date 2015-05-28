@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 """
 Convenience routines for creating non-trivial Field subclasses, as well as
 backwards compatibility utilities.
@@ -108,10 +109,13 @@ def make_contrib(superclass, func=None):
     superclass methods.
     """
     def contribute_to_class(self, cls, name):
+        # cls为Model的class
         if func:
             func(self, cls, name)
         else:
             super(superclass, self).contribute_to_class(cls, name)
+
+        # 相当于为model class添加了一个data-descriptor
         setattr(cls, self.name, Creator(self))
 
     return contribute_to_class

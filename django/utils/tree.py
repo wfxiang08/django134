@@ -11,6 +11,10 @@ class Node(object):
     A single internal node in the tree graph. A Node should be viewed as a
     connection (the root) with the children being either leaf nodes or other
     Node instances.
+
+    Connection
+
+    Node1 Node2 Child
     """
     # Standard connector type. Clients usually won't use this at all and
     # subclasses will usually override the value.
@@ -94,20 +98,30 @@ class Node(object):
         """
         if node in self.children and conn_type == self.connector:
             return
+
+        # 如果child只有一个, 则connector没有意义
         if len(self.children) < 2:
             self.connector = conn_type
+
+        # 例如: a, b
         if self.connector == conn_type:
 
-            # 如果node为Node类型，并且内部的conn_type相同, 则直接合并所有的children
+            # 如果node为Node类型，
+            # 并且内部的conn_type相同, 则直接合并所有的children
+            # 例如: a & b & (c & d)
             if isinstance(node, Node) and (node.connector == conn_type or len(node) == 1):
                 self.children.extend(node.children)
             else:
-                # 否则直接添加node
+                # 其他类型
+                # 1. node不是Node类型，那可能是啥呢? 最基础的
+                # 2. node的connector和当前的connector不一样，不能直接合并
                 self.children.append(node)
         else:
             #  如果两个类型不一样
             #  (a or b or c)   AND d
             #  (a and b and c) OR d
+            # conn_type不一样，则当前的所有的child需要合并成为一个新的node, 和给定的node共存
+            # negated? 什么时候发挥作用呢?
             obj = self._new_instance(self.children, self.connector, self.negated)
             self.connector = conn_type
             self.children = [obj, node]
