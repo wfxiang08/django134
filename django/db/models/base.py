@@ -699,13 +699,17 @@ class Model(object):
 
     save_base.alters_data = True
 
-    def delete(self, using=None):
-        using = using or router.db_for_write(self.__class__, instance=self)
-        assert self._get_pk_val() is not None, "%s object can't be deleted because its %s attribute is set to None." % (self._meta.object_name, self._meta.pk.attname)
+    def delete(self, using=None, force_delete=False):
+        from django.conf import settings
+        # 如果是TestCase, 则运行删除；否则不运行删除
+        if (hasattr(settings, "IS_FOR_TESTCASE") and settings.IS_FOR_TESTCASE) or force_delete:
+            using = using or router.db_for_write(self.__class__, instance=self)
+            assert self._get_pk_val() is not None, "%s object can't be deleted because its %s attribute is set to None." % (self._meta.object_name, self._meta.pk.attname)
 
-        collector = Collector(using=using)
-        collector.collect([self])
-        collector.delete()
+            # 级联收集可以删除的元素
+            collector = Collector(using=using)
+            collector.collect([self])
+            collector.delete()
 
     delete.alters_data = True
 

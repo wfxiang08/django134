@@ -487,10 +487,15 @@ class QuerySet(object):
         qs.query.clear_ordering(force_empty=True)
         return dict([(obj._get_pk_val(), obj) for obj in qs.iterator()])
 
-    def delete(self):
+    def delete(self, force_delete=False):
         """
         Deletes the records in the current QuerySet.
         """
+        from django.conf import settings
+        # 如果不是TestCase, 或者强制删除，则提出警告
+        if not ((hasattr(settings, "IS_FOR_TESTCASE") and settings.IS_FOR_TESTCASE) or force_delete):
+            raise Warning()
+
         assert self.query.can_filter(), \
                 "Cannot use 'limit' or 'offset' with delete."
 
