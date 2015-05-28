@@ -3,9 +3,12 @@ import sys
 
 from django import http
 from django.core import signals
+from django.core.exceptions import OperationDeniedException
 from django.utils.encoding import force_unicode
 from django.utils.importlib import import_module
 from django.utils.log import getLogger
+
+from django.core import exceptions
 
 logger = getLogger('django.request')
 
@@ -170,6 +173,16 @@ class BaseHandler(object):
             except SystemExit:
                 # Allow sys.exit() to actually exit. See tickets #1023 and #4701
                 raise
+            except OperationDeniedException:
+                # 处理额外的操作
+                if exceptions.get_chunyu_default_exception_handler():
+                    try:
+                        exceptions.get_chunyu_default_exception_handler()()
+                    except:
+                        pass
+
+                receivers = signals.got_request_exception.send(sender=self.__class__, request=request)
+                response = self.handle_uncaught_exception(request, resolver, sys.exc_info())
             except: # Handle everything else, including SuspiciousOperation, etc.
                 # Get the exception info now, in case another exception is thrown later.
                 receivers = signals.got_request_exception.send(sender=self.__class__, request=request)

@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 """
 Global Django exception and warning classes.
 """
@@ -36,6 +37,40 @@ class ImproperlyConfigured(Exception):
 class FieldError(Exception):
     """Some kind of problem with a model field."""
     pass
+
+class FieldError(Exception):
+    """Some kind of problem with a model field."""
+    pass
+
+class OperationDeniedException(Exception):
+    """
+        遇到不允许的操作时，抛
+    """
+    pass
+
+
+_chunyu_default_exception_handler = 0
+def get_chunyu_default_exception_handler():
+    global _chunyu_default_exception_handler
+
+    if _chunyu_default_exception_handler is 0:
+        from django.conf import settings
+        if hasattr(settings, "CHUNYU_DEFAULT_EXCEPTION_HANDLER") and settings.CHUNYU_DEFAULT_EXCEPTION_HANDLER:
+            # 加载函数
+            try:
+                from django.utils.importlib import import_module
+                packages = settings.CHUNYU_DEFAULT_EXCEPTION_HANDLER.split(".")
+                module = import_module(".".join(packages[:-1]))
+                _chunyu_default_exception_handler = getattr(module, packages[-1])
+                if not hasattr(_chunyu_default_exception_handler, "__call__"):
+                    _chunyu_default_exception_handler = None
+            except:
+                _chunyu_default_exception_handler = None
+
+    return _chunyu_default_exception_handler
+
+
+
 
 NON_FIELD_ERRORS = '__all__'
 class ValidationError(Exception):

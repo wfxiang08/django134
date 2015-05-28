@@ -5,7 +5,8 @@ from itertools import izip
 from django.db.utils import get_stack_info
 
 import django.db.models.manager     # Imported to register signal handler.
-from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned, FieldError, ValidationError, NON_FIELD_ERRORS
+from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned, FieldError, ValidationError, NON_FIELD_ERRORS, \
+    OperationDeniedException
 from django.core import validators
 from django.db.models.fields import AutoField, FieldDoesNotExist
 from django.db.models.fields.related import (OneToOneRel, ManyToOneRel,
@@ -710,6 +711,8 @@ class Model(object):
             collector = Collector(using=using)
             collector.collect([self])
             collector.delete()
+        else:
+            raise OperationDeniedException("数据库禁止直接删除，请使用标记删除")
 
     delete.alters_data = True
 

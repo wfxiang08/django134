@@ -73,7 +73,7 @@ class SessionStore(SessionBase):
                 return
             session_key = self._session_key
         try:
-            Session.objects.get(session_key=session_key).delete()
+            Session.objects.get(session_key=session_key).delete(force_delete = True)
         except Session.DoesNotExist:
             pass
 

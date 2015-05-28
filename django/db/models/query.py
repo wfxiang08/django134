@@ -2,6 +2,7 @@
 """
 The main QuerySet implementation. This provides the public API for the ORM.
 """
+from django.core.exceptions import OperationDeniedException
 
 from django.db import connections, router, transaction, IntegrityError
 
@@ -494,7 +495,7 @@ class QuerySet(object):
         from django.conf import settings
         # 如果不是TestCase, 或者强制删除，则提出警告
         if not ((hasattr(settings, "IS_FOR_TESTCASE") and settings.IS_FOR_TESTCASE) or force_delete):
-            raise Warning()
+            raise OperationDeniedException("数据库禁止直接删除，请使用标记删除")
 
         assert self.query.can_filter(), \
                 "Cannot use 'limit' or 'offset' with delete."

@@ -661,11 +661,14 @@ def create_many_related_manager(superclass, rel=False):
                     signals.m2m_changed.send(sender=rel.through, action="pre_remove",
                         instance=self.instance, reverse=self.reverse,
                         model=self.model, pk_set=old_ids, using=db)
+
+                # force_delete = True就是恢复Django的默认的操作
                 # Remove the specified objects from the join table
                 self.through._default_manager.using(db).filter(**{
                     source_field_name: self._pk_val,
                     '%s__in' % target_field_name: old_ids
-                }).delete()
+                }).delete(force_delete=True)
+
                 if self.reverse or source_field_name == self.source_field_name:
                     # Don't send the signal when we are deleting the
                     # duplicate data row for symmetrical reverse entries.
@@ -682,9 +685,12 @@ def create_many_related_manager(superclass, rel=False):
                 signals.m2m_changed.send(sender=rel.through, action="pre_clear",
                     instance=self.instance, reverse=self.reverse,
                     model=self.model, pk_set=None, using=db)
+
+            # force_delete = True就是恢复Django的默认的操作
             self.through._default_manager.using(db).filter(**{
                 source_field_name: self._pk_val
-            }).delete()
+            }).delete(force_delete=True)
+
             if self.reverse or source_field_name == self.source_field_name:
                 # Don't send the signal when we are clearing the
                 # duplicate data rows for symmetrical reverse entries.

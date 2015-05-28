@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 import datetime
 import urllib
 
@@ -349,7 +350,8 @@ class User(models.Model):
         messages = []
         for m in self.message_set.all():
             messages.append(m.message)
-            m.delete()
+            # force_delete = True就是恢复Django的默认的操作
+            m.delete(force_delete = True)
         return messages
 
     def email_user(self, subject, message, from_email=None):

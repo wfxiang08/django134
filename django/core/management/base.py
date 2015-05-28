@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 """
 Base classes for writing management commands (named commands which can
 be executed through ``django-admin.py`` or ``manage.py``).
@@ -9,6 +10,7 @@ import sys
 from optparse import make_option, OptionParser
 
 import django
+from django.core import exceptions
 from django.core.exceptions import ImproperlyConfigured
 from django.core.management.color import color_style
 from django.utils.encoding import smart_str
@@ -188,7 +190,17 @@ class BaseCommand(object):
         parser = self.create_parser(argv[0], argv[1])
         options, args = parser.parse_args(argv[2:])
         handle_default_options(options)
-        self.execute(*args, **options.__dict__)
+        try:
+            self.execute(*args, **options.__dict__)
+        except:
+            # 脚本执行过程中出现异常，则同时发送到sentry中
+            # Modified by Feiwang
+            if exceptions.get_chunyu_default_exception_handler():
+                try:
+                    exceptions.get_chunyu_default_exception_handler()()
+                except:
+                    pass
+            raise
 
     def execute(self, *args, **options):
         """

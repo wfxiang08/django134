@@ -17,7 +17,7 @@ class SessionManager(models.Manager):
         if session_dict:
             s.save()
         else:
-            s.delete() # Clear sessions with no data.
+            s.delete(force_delete = True) # Clear sessions with no data.
         return s
 
 
