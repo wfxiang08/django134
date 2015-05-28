@@ -117,7 +117,8 @@ class ChangeList(object):
         if not self.query_set.query.where:
             full_result_count = result_count
         else:
-            full_result_count = self.root_query_set.count()
+            # 不管怎么样，都返回1000(避免SELECT COUNT(1)操作)
+            full_result_count = 1000 # self.root_query_set.count()
 
         can_show_all = result_count <= MAX_SHOW_ALL_ALLOWED
         multi_page = result_count > self.list_per_page
@@ -237,6 +238,10 @@ class ChangeList(object):
         # Use select_related() if one of the list_display options is a field
         # with a relationship and the provided queryset doesn't already have
         # select_related defined.
+
+        # 如何处理 select_related?
+        # 要么读取全部的外键，要么根据list_display来判断是否要读取外键
+        #
         if not qs.query.select_related:
             if self.list_select_related:
                 qs = qs.select_related()

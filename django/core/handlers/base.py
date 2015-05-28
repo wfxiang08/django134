@@ -82,6 +82,8 @@ class BaseHandler(object):
             # resolver is set
             urlconf = settings.ROOT_URLCONF
             urlresolvers.set_urlconf(urlconf)
+
+            # urlconf 在内部已经编译好，成为Regex
             resolver = urlresolvers.RegexURLResolver(r'^/', urlconf)
             try:
                 response = None
@@ -100,8 +102,8 @@ class BaseHandler(object):
                         urlresolvers.set_urlconf(urlconf)
                         resolver = urlresolvers.RegexURLResolver(r'^/', urlconf)
 
-                    callback, callback_args, callback_kwargs = resolver.resolve(
-                            request.path_info)
+                    # 通过 def __getitem__(self, index): 来实现从 ResolverMatch 到 tuple的转换
+                    callback, callback_args, callback_kwargs = resolver.resolve(request.path_info)
 
                     # 2.1 这是什么东西呢?
                     # Apply view middleware

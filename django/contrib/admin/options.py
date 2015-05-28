@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 from django import forms, template
 from django.forms.formsets import all_valid
 from django.forms.models import (modelform_factory, modelformset_factory,
@@ -292,6 +293,8 @@ class ModelAdmin(BaseModelAdmin):
             self.inline_instances.append(inline_instance)
         if 'action_checkbox' not in self.list_display and self.actions is not None:
             self.list_display = ['action_checkbox'] +  list(self.list_display)
+
+        # list_display_links的构建
         if not self.list_display_links:
             for name in self.list_display:
                 if name != 'action_checkbox':
@@ -310,21 +313,11 @@ class ModelAdmin(BaseModelAdmin):
         info = self.model._meta.app_label, self.model._meta.module_name
 
         urlpatterns = patterns('',
-            url(r'^$',
-                wrap(self.changelist_view),
-                name='%s_%s_changelist' % info),
-            url(r'^add/$',
-                wrap(self.add_view),
-                name='%s_%s_add' % info),
-            url(r'^(.+)/history/$',
-                wrap(self.history_view),
-                name='%s_%s_history' % info),
-            url(r'^(.+)/delete/$',
-                wrap(self.delete_view),
-                name='%s_%s_delete' % info),
-            url(r'^(.+)/$',
-                wrap(self.change_view),
-                name='%s_%s_change' % info),
+            url(r'^$', wrap(self.changelist_view), name='%s_%s_changelist' % info),
+            url(r'^add/$', wrap(self.add_view), name='%s_%s_add' % info),
+            url(r'^(.+)/history/$', wrap(self.history_view), name='%s_%s_history' % info),
+            url(r'^(.+)/delete/$', wrap(self.delete_view), name='%s_%s_delete' % info),
+            url(r'^(.+)/$', wrap(self.change_view), name='%s_%s_change' % info),
         )
         return urlpatterns
 

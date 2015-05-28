@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 import weakref
 import threading
 
@@ -6,6 +7,7 @@ from django.dispatch import saferef
 WEAKREF_TYPES = (weakref.ReferenceType, saferef.BoundMethodWeakref)
 
 def _make_id(target):
+    # 利用: id函数来生成对象的id
     if hasattr(target, 'im_func'):
         return (id(target.im_self), id(target.im_func))
     return id(target)
@@ -68,6 +70,10 @@ class Signal(object):
                 a receiver. This will usually be a string, though it may be
                 anything hashable.
         """
+        # pre_save.connect(doctor_info_pre_save_for_score_list, sender=ClinicDoctorInfo,
+        #          dispatch_uid='doctor_info_pre_save_for_score_list_identifier')
+
+
         from django.conf import settings
         
         # If DEBUG is on, check that we got a good receiver
@@ -90,17 +96,20 @@ class Signal(object):
             if argspec:
                 assert argspec[2] is not None, \
                     "Signal receivers must accept keyword arguments (**kwargs)."
-        
+
+        # 生成lookup_key( receiver, sender）
         if dispatch_uid:
             lookup_key = (dispatch_uid, _make_id(sender))
         else:
             lookup_key = (_make_id(receiver), _make_id(sender))
 
+        # 为receiver添加weak reference
         if weak:
             receiver = saferef.safeRef(receiver, onDelete=self._remove_receiver)
 
         self.lock.acquire()
         try:
+            # receivers的管理
             for r_key, _ in self.receivers:
                 if r_key == lookup_key:
                     break
@@ -164,11 +173,19 @@ class Signal(object):
 
         Returns a list of tuple pairs [(receiver, response), ... ].
         """
+        # if origin and not meta.auto_created:
+        #     signals.pre_save.send(sender=origin, instance=self, raw=raw, using=using)
+        #
         responses = []
         if not self.receivers:
             return responses
 
+        # 当sender发送消息之后，如何处理呢?
+        # 1. 信号是同步处理的
+        # 2. 关注信号的量?
         for receiver in self._live_receivers(_make_id(sender)):
+            # 通知不同的receiver
+            # 可视化?
             response = receiver(signal=self, sender=sender, **named)
             responses.append((receiver, response))
         return responses
@@ -204,6 +221,7 @@ class Signal(object):
         # Return a list of tuple pairs [(receiver, response), ... ].
         for receiver in self._live_receivers(_make_id(sender)):
             try:
+                # 防止某些callback异常
                 response = receiver(signal=self, sender=sender, **named)
             except Exception, err:
                 responses.append((receiver, err))
@@ -221,10 +239,13 @@ class Signal(object):
         none_senderkey = _make_id(None)
         receivers = []
 
+        # 这个地方是否可能成为性能的瓶颈呢?
         for (receiverkey, r_senderkey), receiver in self.receivers:
+            # 发送给所有人，或者指定是指定的sender
             if r_senderkey == none_senderkey or r_senderkey == senderkey:
                 if isinstance(receiver, WEAKREF_TYPES):
                     # Dereference the weak reference.
+                    # 如何处理weak reference?
                     receiver = receiver()
                     if receiver is not None:
                         receivers.append(receiver)
