@@ -1175,7 +1175,7 @@ class Query(object):
             self.promote_alias_chain(table_it, table_promote or join_promote)
 
         # 在这里value就已经完成了从 user = User() --> user = user_id的转变
-        print "VALUE: ", value, value.__class__
+        # print "VALUE: ", value, value.__class__
         # 如何理解value？
         # 例如:
         #       user = user_id
