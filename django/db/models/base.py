@@ -2,6 +2,8 @@
 import types
 import sys
 from itertools import izip
+# from django import DeleteProtectedAttribute
+from django import is_chunyu_test_case, is_app_label_delete_protected
 from django.db.utils import get_stack_info
 
 import django.db.models.manager     # Imported to register signal handler.
@@ -91,7 +93,6 @@ class ModelBase(type):
         # kwargs最多只有一个参数; app_label
         # _meta一方面从Options获取数据，另一方面从_new_class中获取信息： contribute_to_class
         new_class.add_to_class('_meta', Options(meta, **kwargs))
-
 
         if not abstract:
             # 添加 DoesNotExist, MultipleObjectReturned Exception
@@ -240,6 +241,12 @@ class ModelBase(type):
             return new_class
 
         new_class._prepare()
+
+        # 设置 is_delete_protected 属性
+        is_delete_protected = not is_chunyu_test_case() and is_app_label_delete_protected(new_class._meta.app_label)
+        setattr(new_class, "is_delete_protected", is_delete_protected)
+
+
 
         # 准备Models到cache中
         register_models(new_class._meta.app_label, new_class)
@@ -706,7 +713,7 @@ class Model(object):
     def delete(self, using=None, force_delete=False):
 
         # 如果不是TestCase, 或者强制删除，则提出警告
-        if self.model.is_delete_protected and not force_delete:
+        if self.is_delete_protected and not force_delete:
             raise OperationDeniedException("数据库禁止直接删除，请使用标记删除")
         else:
             using = using or router.db_for_write(self.__class__, instance=self)

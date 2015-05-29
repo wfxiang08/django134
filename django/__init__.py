@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 VERSION = (1, 3, 4, 'final-cyom', 0)
 
 def get_version():
@@ -22,3 +23,30 @@ def is_chunyu_test_case():
 def is_app_label_delete_protected(app_label):
     from django.conf import settings
     return hasattr(settings, "DELETE_PROTECTED_APPS") and (app_label in settings.DELETE_PROTECTED_APPS)
+
+
+# setattr(cls, "is_delete_protected", DeleteProtectedAttribute(related))
+# class DeleteProtectedAttribute(object):
+#     """
+#     """
+#     def __init__(self, app_label):
+#         # 如果是TestCase则不保护，
+#         self.is_delete_protected = not is_chunyu_test_case() and is_app_label_delete_protected(app_label)
+#
+#     def __get__(self, instance, owner):
+#         """
+#         Retrieves and caches the value from the datastore on the first lookup.
+#         Returns the cached value.
+#
+#         如果instance为None, 表示是通过class来调用的
+#         """
+#         self.is_delete_protected
+#
+#
+#     def __set__(self, instance, value):
+#         """
+#         Deferred loading attributes can be set normally (which means there will
+#         never be a database lookup involved.
+#         """
+#         # 只是为了避免调用attribute函数
+#         pass

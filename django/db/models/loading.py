@@ -3,7 +3,6 @@
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
-from django import is_chunyu_test_case, is_app_label_delete_protected
 from django.utils.datastructures import SortedDict
 from django.utils.importlib import import_module
 from django.utils.module_loading import module_has_submodule
@@ -214,10 +213,6 @@ class AppCache(object):
                 # comparing.
                 if os.path.splitext(fname1)[0] == os.path.splitext(fname2)[0]:
                     continue
-
-            # 不是测试场合，并且指定了要保护
-            is_delete_protected = not is_chunyu_test_case() and is_app_label_delete_protected(app_label)
-            model.is_delete_protected = is_delete_protected
 
             model_dict[model_name] = model
 
