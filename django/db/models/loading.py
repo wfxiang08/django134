@@ -1,7 +1,9 @@
+# -*- coding:utf-8 -*-
 "Utilities for loading models and the modules that contain them."
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
+from django.db.models import is_chunyu_test_case, is_app_label_delete_protected
 from django.utils.datastructures import SortedDict
 from django.utils.importlib import import_module
 from django.utils.module_loading import module_has_submodule
@@ -199,6 +201,8 @@ class AppCache(object):
             # in the app_models dictionary
             model_name = model._meta.object_name.lower()
             model_dict = self.app_models.setdefault(app_label, SortedDict())
+
+            # 如果 app_models 和 model_name相同, 那么需要检查两个model是否一样，如果一样，则跳过；如果不一样，则跟新
             if model_name in model_dict:
                 # The same model may be imported via different paths (e.g.
                 # appname.models and project.appname.models). We use the source
@@ -210,7 +214,14 @@ class AppCache(object):
                 # comparing.
                 if os.path.splitext(fname1)[0] == os.path.splitext(fname2)[0]:
                     continue
+
+            # 不是测试场合，并且指定了要保护
+            is_delete_protected = not is_chunyu_test_case() and is_app_label_delete_protected(app_label)
+            model.is_delete_protected = is_delete_protected
+
             model_dict[model_name] = model
+
+
         self._get_models_cache.clear()
 
 cache = AppCache()

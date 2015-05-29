@@ -8,3 +8,20 @@
 ```bash
 smart_update.py -f Django==1.3.4-dev
 ```
+
+## 增加了Model的删除保护
+
+```python
+# 在settings中增加: DELETE_PROTECTED_APPS
+DELETED_OTHER_APPS = ('django.contrib.auth',)
+DELETE_PROTECTED_APPS = set() # 定义了被Django保护的Models
+for app in (CHUNYU_APPS + DELETED_OTHER_APPS):
+    app_label = app.split(".")[-1]
+    DELETE_PROTECTED_APPS.add(app_label)
+
+# 然后这些app下的model就不能直接调用如下方法
+User.objects.get(id=1).delete()
+
+User.objects.filter(id__in=[1,2]).delete()
+
+```

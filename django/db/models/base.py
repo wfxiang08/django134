@@ -79,6 +79,9 @@ class ModelBase(type):
         if getattr(meta, 'app_label', None) is None:
             # Figure out the app_label by looking one level up.
             # For 'django.contrib.sites.models', this would be 'sites'.
+            #
+            # app_label是如何获取的呢?
+            #
             model_module = sys.modules[new_class.__module__]
             kwargs = {"app_label": model_module.__name__.split('.')[-2]}
         else:
@@ -701,9 +704,11 @@ class Model(object):
     save_base.alters_data = True
 
     def delete(self, using=None, force_delete=False):
-        from django.conf import settings
-        # 如果是TestCase, 则运行删除；否则不运行删除
-        if (hasattr(settings, "IS_FOR_TESTCASE") and settings.IS_FOR_TESTCASE) or force_delete:
+
+        # 如果不是TestCase, 或者强制删除，则提出警告
+        if self.model.is_delete_protected and not force_delete:
+            raise OperationDeniedException("数据库禁止直接删除，请使用标记删除")
+        else:
             using = using or router.db_for_write(self.__class__, instance=self)
             assert self._get_pk_val() is not None, "%s object can't be deleted because its %s attribute is set to None." % (self._meta.object_name, self._meta.pk.attname)
 
@@ -711,8 +716,6 @@ class Model(object):
             collector = Collector(using=using)
             collector.collect([self])
             collector.delete()
-        else:
-            raise OperationDeniedException("数据库禁止直接删除，请使用标记删除")
 
     delete.alters_data = True
 

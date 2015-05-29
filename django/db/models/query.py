@@ -9,7 +9,7 @@ from django.db import connections, router, transaction, IntegrityError
 from django.db.models.query_utils import (Q, select_related_descend,
     deferred_class_factory, InvalidQuery)
 from django.db.models.deletion import Collector
-from django.db.models import sql
+from django.db.models import sql, is_chunyu_test_case
 from django.utils.copycompat import deepcopy
 
 # Used to control how many objects are worked with at once in some cases (e.g.
@@ -492,31 +492,29 @@ class QuerySet(object):
         """
         Deletes the records in the current QuerySet.
         """
-        from django.conf import settings
         # 如果不是TestCase, 或者强制删除，则提出警告
-        if not ((hasattr(settings, "IS_FOR_TESTCASE") and settings.IS_FOR_TESTCASE) or force_delete):
+        if self.model.is_delete_protected and not force_delete:
             raise OperationDeniedException("数据库禁止直接删除，请使用标记删除")
+        else:
+            assert self.query.can_filter(), "Cannot use 'limit' or 'offset' with delete."
 
-        assert self.query.can_filter(), \
-                "Cannot use 'limit' or 'offset' with delete."
+            del_query = self._clone()
 
-        del_query = self._clone()
+            # The delete is actually 2 queries - one to find related objects,
+            # and one to delete. Make sure that the discovery of related
+            # objects is performed on the same database as the deletion.
+            del_query._for_write = True
 
-        # The delete is actually 2 queries - one to find related objects,
-        # and one to delete. Make sure that the discovery of related
-        # objects is performed on the same database as the deletion.
-        del_query._for_write = True
+            # Disable non-supported fields.
+            del_query.query.select_related = False
+            del_query.query.clear_ordering()
 
-        # Disable non-supported fields.
-        del_query.query.select_related = False
-        del_query.query.clear_ordering()
+            collector = Collector(using=del_query.db)
+            collector.collect(del_query)
+            collector.delete()
 
-        collector = Collector(using=del_query.db)
-        collector.collect(del_query)
-        collector.delete()
-
-        # Clear the result cache, in case this QuerySet gets reused.
-        self._result_cache = None
+            # Clear the result cache, in case this QuerySet gets reused.
+            self._result_cache = None
     delete.alters_data = True
 
     def update(self, **kwargs):

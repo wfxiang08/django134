@@ -51,8 +51,9 @@ class UserMessagesStorage(BaseStorage):
         messages (since no messages are stored in this read-only storage).
         """
         queryset = self._get_messages_queryset()
+        # 内部消息的删除
         if queryset is not None:
-            queryset.delete()
+            queryset.delete(force_delete=True)
         return messages
 
 

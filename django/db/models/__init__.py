@@ -34,3 +34,11 @@ def permalink(func):
         bits = func(*args, **kwargs)
         return reverse(bits[0], None, *bits[1:3])
     return inner
+
+
+def is_chunyu_test_case():
+    return hasattr(settings, "IS_FOR_TESTCASE") and settings.IS_FOR_TESTCASE
+
+def is_app_label_delete_protected(app_label):
+    return hasattr(settings, "DELETE_PROTECTED_APPS") and (app_label in settings.DELETE_PROTECTED_APPS)
+
