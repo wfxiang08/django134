@@ -9,7 +9,7 @@ from django.db import connections, router, transaction, IntegrityError
 from django.db.models.query_utils import (Q, select_related_descend,
     deferred_class_factory, InvalidQuery)
 from django.db.models.deletion import Collector
-from django.db.models import sql, is_chunyu_test_case
+from django.db.models import sql
 from django.utils.copycompat import deepcopy
 
 # Used to control how many objects are worked with at once in some cases (e.g.

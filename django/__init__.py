@@ -14,3 +14,11 @@ def get_version():
     if svn_rev != u'SVN-unknown':
         version = "%s %s" % (version, svn_rev)
     return version
+
+def is_chunyu_test_case():
+    from django.conf import settings
+    return hasattr(settings, "IS_FOR_TESTCASE") and settings.IS_FOR_TESTCASE
+
+def is_app_label_delete_protected(app_label):
+    from django.conf import settings
+    return hasattr(settings, "DELETE_PROTECTED_APPS") and (app_label in settings.DELETE_PROTECTED_APPS)

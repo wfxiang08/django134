@@ -3,7 +3,7 @@
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
-from django.db.models import is_chunyu_test_case, is_app_label_delete_protected
+from django import is_chunyu_test_case, is_app_label_delete_protected
 from django.utils.datastructures import SortedDict
 from django.utils.importlib import import_module
 from django.utils.module_loading import module_has_submodule
