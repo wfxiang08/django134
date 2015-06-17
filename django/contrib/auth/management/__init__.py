@@ -55,10 +55,11 @@ def create_permissions(app, created_models, verbosity, **kwargs):
         if (ctype.pk, codename) in all_perms:
             continue
         # print "Add New Permission: ", ctype, codename, name
-        p = auth_app.Permission.objects.create(
+        # all_perms一口气读取完毕之后，就暂时不更新了，可能会有异常
+        p, _created = auth_app.Permission.objects.get_or_create(
             codename=codename,
-            name=name,
-            content_type=ctype
+            content_type=ctype,
+            defaults = {"name": name,}
         )
         if verbosity >= 2:
             print "Adding permission '%s'" % p
