@@ -115,7 +115,7 @@ class BaseModelAdmin(object):
                     total_rows = row[4]
 
                     if total_rows > 500:
-                        raise OperationDeniedException("%s应该将%s添加到raw_id_fields中(存在性能问题)" % (self.model, self.db_field.name))
+                        raise OperationDeniedException("%s应该将%s添加到raw_id_fields中(存在性能问题)" % (self.model, db_field.name))
 
 
             elif isinstance(db_field, models.ManyToManyField):
