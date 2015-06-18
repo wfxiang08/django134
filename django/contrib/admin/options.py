@@ -8,7 +8,7 @@ from django.contrib.admin import widgets, helpers
 from django.contrib.admin.util import unquote, flatten_fieldsets, get_deleted_objects, model_format_dict
 from django.contrib import messages
 from django.views.decorators.csrf import csrf_protect
-from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError, OperationDeniedException
 from django.core.paginator import Paginator
 from django.db import models, transaction, router
 from django.db.models.related import RelatedObject
@@ -103,6 +103,21 @@ class BaseModelAdmin(object):
             # Get the correct formfield.
             if isinstance(db_field, models.ForeignKey):
                 formfield = self.formfield_for_foreignkey(db_field, request, **kwargs)
+                if db_field.name not in self.raw_id_fields:
+                    # 如果表很大，则强制加入: raw_id_fields
+                    related_model = db_field.rel.to
+                    db_table = related_model._meta.db_table
+
+                    from django.db import connection
+                    cursor = connection.cursor()
+                    cursor.execute("SHOW TABLE STATUS LIKE '" + db_table + "'")
+                    row = cursor.fetchone()
+                    total_rows = row[4]
+
+                    if total_rows > 500:
+                        raise OperationDeniedException("%s应该将%s添加到raw_id_fields中(存在性能问题)" % (self.model, self.db_field.name))
+
+
             elif isinstance(db_field, models.ManyToManyField):
                 formfield = self.formfield_for_manytomany(db_field, request, **kwargs)
 
@@ -111,8 +126,8 @@ class BaseModelAdmin(object):
             # rendered output. formfield can be None if it came from a
             # OneToOneField with parent_link=True or a M2M intermediary.
             if formfield and db_field.name not in self.raw_id_fields:
-                related_modeladmin = self.admin_site._registry.get(
-                                                            db_field.rel.to)
+
+                related_modeladmin = self.admin_site._registry.get(db_field.rel.to)
                 can_add_related = bool(related_modeladmin and
                             related_modeladmin.has_add_permission(request))
                 formfield.widget = widgets.RelatedFieldWidgetWrapper(
